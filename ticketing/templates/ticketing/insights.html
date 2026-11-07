@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Insights · EventPulse{% endblock %}
+{% block content %}
+{% include 'includes/page_header.html' with eyebrow='Revenue intelligence' title='Insights' description='Revenue, occupancy, and event-health analysis will appear here.' %}
+{% include 'includes/empty_state.html' with heading='Insights need operational data' message='Create records in the future event, attendee, and ticket workflows to activate meaningful analysis.' %}
+<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+{% endblock %}

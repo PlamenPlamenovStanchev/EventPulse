@@ -1,0 +1,24 @@
+# Virtual environments and environment variables
+.venv/
+.env
+.env.*
+
+# Python bytecode and test caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local Django data and generated static output
+db.sqlite3
+staticfiles/
+
+# IDE settings
+.idea/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp

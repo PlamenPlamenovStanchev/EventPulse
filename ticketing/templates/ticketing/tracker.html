@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Tracker · EventPulse{% endblock %}
+{% block content %}
+{% include 'includes/page_header.html' with eyebrow='Operations tracker' title='Tracker' description='A future operational view for event readiness and follow-up.' %}
+{% include 'includes/empty_state.html' with heading='No activity to track yet' message='The tracker will surface operational signals once events, attendees, and tickets are available.' %}
+<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+{% endblock %}

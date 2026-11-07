@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Attendees · EventPulse{% endblock %}
+{% block content %}
+{% include 'includes/page_header.html' with eyebrow='Attendee operations' title='Attendees' description='The reusable attendee directory will live here.' %}
+{% include 'includes/empty_state.html' with heading='Attendee management is a foundation-stage placeholder' message='Attendee records and event participation will become available after the domain model is implemented.' %}
+<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+{% endblock %}

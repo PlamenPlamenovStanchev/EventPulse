@@ -1,0 +1,21 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="EventPulse event operations and revenue intelligence platform.">
+    <title>{% block title %}EventPulse{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/eventpulse.css' %}">
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div class="app-shell">
+        {% include 'includes/navigation.html' %}
+        <main id="main-content" class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+        {% include 'includes/footer.html' %}
+    </div>
+</body>
+</html>

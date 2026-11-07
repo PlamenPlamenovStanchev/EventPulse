@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard · EventPulse{% endblock %}
+
+{% block content %}
+{% include 'includes/page_header.html' with eyebrow='Operations command center' title='Welcome to EventPulse' description='Every event. Every attendee. Every insight.' %}
+
+<section class="intro-panel" aria-labelledby="introduction-title">
+    <div>
+        <p class="section-label">Foundation stage</p>
+        <h2 id="introduction-title">Your operational signal starts here.</h2>
+        <p>EventPulse will bring venue capacity, attendee activity, ticket payments, and revenue intelligence into one focused workspace.</p>
+    </div>
+    <a class="button button-secondary" href="{% url 'events:event_list' %}">Explore Events</a>
+</section>
+
+<section aria-labelledby="kpi-title">
+    <div class="section-heading">
+        <div><p class="section-label">Live view</p><h2 id="kpi-title">Operational snapshot</h2></div>
+        <span class="status-badge status-neutral">Waiting for records</span>
+    </div>
+    <div class="kpi-grid">
+        <article class="kpi-card"><p>Upcoming events</p><strong>—</strong><span>No event records yet</span></article>
+        <article class="kpi-card"><p>Tickets reserved</p><strong>—</strong><span>No ticket records yet</span></article>
+        <article class="kpi-card"><p>Collected revenue</p><strong>—</strong><span>Payment tracking starts with tickets</span></article>
+        <article class="kpi-card"><p>Venue occupancy</p><strong>—</strong><span>Capacity insights appear after setup</span></article>
+    </div>
+</section>
+
+<section class="module-section" aria-labelledby="modules-title">
+    <div class="section-heading">
+        <div><p class="section-label">Workspace</p><h2 id="modules-title">Modules ready to connect</h2></div>
+        <p class="section-note">Statistics will become available once records are created.</p>
+    </div>
+    <div class="module-grid">
+        <a class="module-card" href="{% url 'events:event_list' %}"><span class="module-number">01</span><h3>Events</h3><p>Plan schedules and connect venues.</p></a>
+        <a class="module-card" href="{% url 'attendees:attendee_list' %}"><span class="module-number">02</span><h3>Attendees</h3><p>Build a reliable attendee directory.</p></a>
+        <a class="module-card" href="{% url 'ticketing:ticket_list' %}"><span class="module-number">03</span><h3>Tickets</h3><p>Track reservations and payments.</p></a>
+        <a class="module-card" href="{% url 'ticketing:insights' %}"><span class="module-number">04</span><h3>Insights</h3><p>Turn operational data into focus.</p></a>
+    </div>
+</section>
+{% endblock %}

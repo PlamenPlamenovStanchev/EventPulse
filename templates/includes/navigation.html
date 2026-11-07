@@ -1,0 +1,18 @@
+<header class="site-header">
+    <div class="brand-lockup">
+        <a class="brand" href="{% url 'ticketing:dashboard' %}" aria-label="EventPulse dashboard">
+            <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>Event<span>Pulse</span></span>
+        </a>
+        <p class="tagline">Every event. Every attendee. Every insight.</p>
+    </div>
+    <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="{% url 'ticketing:dashboard' %}" {% if request.resolver_match.view_name == 'ticketing:dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="{% url 'events:event_list' %}" {% if request.resolver_match.view_name == 'events:event_list' %}aria-current="page"{% endif %}>Events</a>
+        <a href="{% url 'attendees:attendee_list' %}" {% if request.resolver_match.view_name == 'attendees:attendee_list' %}aria-current="page"{% endif %}>Attendees</a>
+        <a href="{% url 'events:venue_list' %}" {% if request.resolver_match.view_name == 'events:venue_list' %}aria-current="page"{% endif %}>Venues</a>
+        <a href="{% url 'ticketing:ticket_list' %}" {% if request.resolver_match.view_name == 'ticketing:ticket_list' %}aria-current="page"{% endif %}>Tickets</a>
+        <a href="{% url 'ticketing:tracker' %}" {% if request.resolver_match.view_name == 'ticketing:tracker' %}aria-current="page"{% endif %}>Tracker</a>
+        <a href="{% url 'ticketing:insights' %}" {% if request.resolver_match.view_name == 'ticketing:insights' %}aria-current="page"{% endif %}>Insights</a>
+    </nav>
+</header>
