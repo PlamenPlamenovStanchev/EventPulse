@@ -5,16 +5,25 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ccfeb251-8845-4dda-96e9-dd503f58c58e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/EventPulse.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/attendees/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/attendees/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/attendees/tests.py" beforeDir="false" afterPath="$PROJECT_DIR$/attendees/tests.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/events/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/events/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/events/tests.py" beforeDir="false" afterPath="$PROJECT_DIR$/events/tests.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ticketing/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/ticketing/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ticketing/tests.py" beforeDir="false" afterPath="$PROJECT_DIR$/ticketing/tests.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="DatabaseLocalColorSettings">
+    <colors>
+      <entry key="7980970c-872c-4b72-ac4e-0c92c7ea4e79" value="" />
+      <entry key="8a1d2834-4864-4f78-857f-1af93f807574" value="" />
+      <entry key="9dd3ae9a-e1df-47f2-ae60-6dea5673a282" value="" />
+    </colors>
   </component>
   <component name="DjangoConsoleOptions" custom-start-script="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)">
     <option name="myCustomStartScript" value="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)" />
@@ -85,10 +94,10 @@
       <entry key="W1" value="28.997183697027303" />
     </decayedShown>
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 5,
-  "fromUser": false
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 5,
+  &quot;fromUser&quot;: false
+}</component>
   <component name="ProjectId" id="3Lmp6nFMgHmJcJMsrVKtCY1ehcg" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -105,7 +114,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
     "django.template.preview.state": "SHOW_EDITOR_AND_PREVIEW",
-    "git-widget-placeholder": "master",
+    "git-widget-placeholder": "main",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -113,6 +122,11 @@
     "nodejs_package_manager_path": "npm",
     "python.packages.toolwindow.project.migrated.to.right.top.v2": "true",
     "settings.editor.selected.configurable": "ml.llm.LLMConfigurable"
+  },
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "sqlite"
+    ]
   }
 }]]></component>
   <component name="RunManager">
@@ -158,7 +172,8 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1794068924836</updated>
-      <workItem from="1794068926042" duration="1766000" />
+      <workItem from="1794068926042" duration="2589000" />
+      <workItem from="1794137605474" duration="1745000" />
     </task>
     <servers />
   </component>
