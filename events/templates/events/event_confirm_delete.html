@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Delete {{ event.name }} · EventPulse{% endblock %}
+{% block content %}
+<section class="confirmation-panel">
+    <p class="eyebrow">Confirm deletion</p>
+    <h1>Delete {{ event.name }}?</h1>
+    <p>This will permanently delete {{ ticket_count }} associated ticket{{ ticket_count|pluralize }}. The venue and attendees will be preserved.</p>
+    <form method="post" class="form-actions">{% csrf_token %}<button class="button button-danger" type="submit">Delete event</button><a class="button button-secondary" href="{% url 'events:event_detail' event.pk %}">Cancel</a></form>
+</section>
+{% endblock %}

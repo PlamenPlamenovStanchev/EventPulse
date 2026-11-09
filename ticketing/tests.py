@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from attendees.models import Attendee
@@ -13,7 +13,7 @@ from events.models import Event, Venue
 from .models import Ticket
 
 
-class InterfaceFoundationTests(SimpleTestCase):
+class InterfaceFoundationTests(TestCase):
     navigation_routes = (
         'ticketing:dashboard',
         'events:event_list',

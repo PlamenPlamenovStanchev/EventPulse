@@ -1,5 +1,7 @@
 # Virtual environments and environment variables
 .venv/
+venv/
+env/
 .env
 .env.*
 
@@ -8,10 +10,25 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Local Django data and generated static output
 db.sqlite3
+*.sqlite
+*.sqlite3
+*.db
 staticfiles/
+
+# Local credentials and certificates
+credentials.json
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
 
 # IDE settings
 .idea/

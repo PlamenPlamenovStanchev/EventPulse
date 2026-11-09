@@ -13,6 +13,13 @@
     <div class="app-shell">
         {% include 'includes/navigation.html' %}
         <main id="main-content" class="main-content">
+            {% if messages %}
+                <div class="message-list" aria-live="polite">
+                    {% for message in messages %}
+                        <div class="message message-{{ message.tags|default:'info' }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
             {% block content %}{% endblock %}
         </main>
         {% include 'includes/footer.html' %}

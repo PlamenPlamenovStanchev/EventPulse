@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}{{ event.name }} · Events · EventPulse{% endblock %}
+{% block content %}
+<div class="page-header page-header-with-action">
+    <div><p class="eyebrow">Event</p><h1>{{ event.name }}</h1><p>{{ event.starts_at|date:"j M Y, H:i" }} · {{ event.venue.name }}</p></div>
+    <div class="button-group"><a class="button button-secondary" href="{% url 'events:event_update' event.pk %}">Edit event</a><a class="button button-danger" href="{% url 'events:event_delete' event.pk %}">Delete event</a></div>
+</div>
+<section class="detail-grid event-metrics" aria-label="Event metrics">
+    <div class="detail-card"><p class="section-label">Tickets reserved</p><strong>{{ event.ticket_count }}</strong><span>of {{ event.venue.capacity }} capacity</span></div>
+    <div class="detail-card"><p class="section-label">Occupancy</p><strong>{{ occupancy_percentage|floatformat:0 }}%</strong><span>of venue capacity</span></div>
+    <div class="detail-card"><p class="section-label">Expected revenue</p><strong>{{ event.expected_revenue|floatformat:2 }}</strong><span>all ticket values</span></div>
+    <div class="detail-card"><p class="section-label">Collected revenue</p><strong>{{ event.collected_revenue|floatformat:2 }}</strong><span>paid tickets only</span></div>
+</section>
+<section class="related-section"><p class="section-label">Event details</p><p class="description-copy">{{ event.description|linebreaksbr }}</p></section>
+<a class="text-link" href="{% url 'events:event_list' %}">Back to events</a>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Delete {{ venue.name }} · EventPulse{% endblock %}
+{% block content %}
+<section class="confirmation-panel">
+    <p class="eyebrow">Confirm deletion</p>
+    <h1>Delete {{ venue.name }}?</h1>
+    <p>This cannot be undone. Venues with related events are protected and cannot be deleted.</p>
+    <form method="post" class="form-actions">
+        {% csrf_token %}
+        <button class="button button-danger" type="submit">Delete venue</button>
+        <a class="button button-secondary" href="{% url 'events:venue_detail' venue.pk %}">Cancel</a>
+    </form>
+</section>
+{% endblock %}

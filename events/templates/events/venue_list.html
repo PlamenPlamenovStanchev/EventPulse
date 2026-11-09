@@ -1,7 +1,29 @@
 {% extends 'base.html' %}
 {% block title %}Venues · EventPulse{% endblock %}
 {% block content %}
-{% include 'includes/page_header.html' with eyebrow='Event operations' title='Venues' description='Venue capacity and location information will be managed here.' %}
-{% include 'includes/empty_state.html' with heading='Venue management is a foundation-stage placeholder' message='Venue records and capacity-aware event planning will be introduced with the domain model.' %}
-<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+<div class="page-header page-header-with-action">
+    <div><p class="eyebrow">Event operations</p><h1>Venues</h1><p>Manage the locations and capacities that support your event schedule.</p></div>
+    <a class="button button-primary" href="{% url 'events:venue_create' %}">Create venue</a>
+</div>
+<form method="get" class="list-controls" aria-label="Search venues">
+    <div class="control-field control-field-wide"><label for="venue-search">Search venues</label><input id="venue-search" name="q" type="search" value="{{ search_term }}" placeholder="Search by venue name or address"></div>
+    <div class="control-actions"><button class="button button-primary" type="submit">Search</button><a class="button button-secondary" href="{% url 'events:venue_list' %}">Clear</a></div>
+</form>
+{% if venues %}
+    <div class="table-wrap" tabindex="0" aria-label="Scrollable venue table">
+        <table class="data-table">
+            <caption class="visually-hidden">Venues</caption>
+            <thead><tr><th scope="col">Venue name</th><th scope="col">Address</th><th scope="col">Capacity</th><th scope="col">Event count</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>{% for venue in venues %}<tr>
+                <td data-label="Venue name"><a class="table-link" href="{% url 'events:venue_detail' venue.pk %}">{{ venue.name }}</a></td>
+                <td data-label="Address">{{ venue.address }}</td>
+                <td data-label="Capacity">{{ venue.capacity }}</td>
+                <td data-label="Event count">{{ venue.event_count }}</td>
+                <td class="table-actions" data-label="Actions"><a href="{% url 'events:venue_detail' venue.pk %}">View<span class="visually-hidden"> {{ venue.name }}</span></a><a href="{% url 'events:venue_update' venue.pk %}">Edit<span class="visually-hidden"> {{ venue.name }}</span></a><a class="danger-link" href="{% url 'events:venue_delete' venue.pk %}">Delete<span class="visually-hidden"> {{ venue.name }}</span></a></td>
+            </tr>{% endfor %}</tbody>
+        </table>
+    </div>
+{% else %}
+    <section class="empty-state" aria-label="No matching venues"><span class="empty-state-icon" aria-hidden="true">+</span><div><h2>{% if search_term %}No venues match this search{% else %}Create your first venue{% endif %}</h2><p>{% if search_term %}Try another venue name or address, or clear the search.{% else %}Start by recording a location and its capacity, then it will be ready for event planning.{% endif %}</p></div><div class="button-group"><a class="button button-primary" href="{% url 'events:venue_create' %}">Create venue</a>{% if search_term %}<a class="button button-secondary" href="{% url 'events:venue_list' %}">Clear search</a>{% endif %}</div></section>
+{% endif %}
 {% endblock %}

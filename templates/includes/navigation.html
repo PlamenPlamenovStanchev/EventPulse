@@ -8,9 +8,9 @@
     </div>
     <nav class="primary-nav" aria-label="Primary navigation">
         <a href="{% url 'ticketing:dashboard' %}" {% if request.resolver_match.view_name == 'ticketing:dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
-        <a href="{% url 'events:event_list' %}" {% if request.resolver_match.view_name == 'events:event_list' %}aria-current="page"{% endif %}>Events</a>
+        <a href="{% url 'events:event_list' %}" {% if request.resolver_match.namespace == 'events' and 'event' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Events</a>
         <a href="{% url 'attendees:attendee_list' %}" {% if request.resolver_match.view_name == 'attendees:attendee_list' %}aria-current="page"{% endif %}>Attendees</a>
-        <a href="{% url 'events:venue_list' %}" {% if request.resolver_match.view_name == 'events:venue_list' %}aria-current="page"{% endif %}>Venues</a>
+        <a href="{% url 'events:venue_list' %}" {% if request.resolver_match.namespace == 'events' and 'venue' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Venues</a>
         <a href="{% url 'ticketing:ticket_list' %}" {% if request.resolver_match.view_name == 'ticketing:ticket_list' %}aria-current="page"{% endif %}>Tickets</a>
         <a href="{% url 'ticketing:tracker' %}" {% if request.resolver_match.view_name == 'ticketing:tracker' %}aria-current="page"{% endif %}>Tracker</a>
         <a href="{% url 'ticketing:insights' %}" {% if request.resolver_match.view_name == 'ticketing:insights' %}aria-current="page"{% endif %}>Insights</a>

@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}{% if form.instance.pk %}Edit {{ form.instance.name }}{% else %}Create venue{% endif %} · EventPulse{% endblock %}
+{% block content %}
+<div class="page-header">
+    <p class="eyebrow">Venue management</p>
+    <h1>{% if form.instance.pk %}Edit venue{% else %}Create venue{% endif %}</h1>
+    <p>{% if form.instance.pk %}Update this venue's location, capacity, or operational notes.{% else %}Add a location before assigning events to it.{% endif %}</p>
+</div>
+<form method="post" class="entity-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}
+        <div class="form-field{% if field.errors %} has-error{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span aria-hidden="true"> *</span>{% endif %}</label>
+            {{ field }}
+            {% if field.help_text %}<p class="help-text">{{ field.help_text }}</p>{% endif %}
+            {% if field.errors %}<div class="field-errors" role="alert">{{ field.errors }}</div>{% endif %}
+        </div>
+    {% endfor %}
+    <div class="form-actions">
+        <button class="button button-primary" type="submit">{% if form.instance.pk %}Save changes{% else %}Create venue{% endif %}</button>
+        <a class="button button-secondary" href="{% if form.instance.pk %}{% url 'events:venue_detail' form.instance.pk %}{% else %}{% url 'events:venue_list' %}{% endif %}">Cancel</a>
+    </div>
+</form>
+{% endblock %}
