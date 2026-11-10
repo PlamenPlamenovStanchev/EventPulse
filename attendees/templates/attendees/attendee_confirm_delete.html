@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Delete {{ attendee.name }} · EventPulse{% endblock %}
+{% block content %}
+<section class="confirmation-panel">
+    <p class="eyebrow">Confirm deletion</p>
+    <h1>Delete {{ attendee.name }}?</h1>
+    <p>This cannot be undone. Attendees with related tickets are protected and cannot be deleted.</p>
+    <form method="post" class="form-actions">
+        {% csrf_token %}
+        <button class="button button-danger" type="submit">Delete attendee</button>
+        <a class="button button-secondary" href="{% url 'attendees:attendee_detail' attendee.pk %}">Cancel</a>
+    </form>
+</section>
+{% endblock %}
