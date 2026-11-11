@@ -48,6 +48,48 @@ class VenueModelTests(TestCase):
 
         self.assertEqual(str(venue), "Riverside Hall")
 
+    def test_capacity_is_checked_per_event_not_across_all_events(self):
+        venue = Venue.objects.create(
+            name="Riverside Hall", address="1 Main Street", capacity=10
+        )
+        events = [
+            Event.objects.create(
+                name=f"Event {index}",
+                starts_at=timezone.now(),
+                description="A one-day conference.",
+                venue=venue,
+            )
+            for index in ("A", "B")
+        ]
+        for event_index, event in enumerate(events):
+            for ticket_index in range(10):
+                attendee = Attendee.objects.create(
+                    name=f"Attendee {event_index}-{ticket_index}",
+                    email=f"attendee-{event_index}-{ticket_index}@example.com",
+                    phone="555-0100",
+                )
+                Ticket.objects.create(
+                    event=event, attendee=attendee, price=Decimal("25.00")
+                )
+
+        venue.address = "2 Main Street"
+        venue.save()
+        self.assertEqual(Venue.objects.get(pk=venue.pk).address, "2 Main Street")
+
+        venue.capacity = 10
+        venue.save()
+
+        venue.capacity = 9
+        with self.assertRaises(ValidationError):
+            venue.save()
+
+        venue.refresh_from_db()
+        self.assertEqual(venue.capacity, 10)
+
+        venue.capacity = 15
+        venue.save()
+        self.assertEqual(Venue.objects.get(pk=venue.pk).capacity, 15)
+
 
 class EventModelTests(TestCase):
     def setUp(self):

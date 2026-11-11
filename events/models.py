@@ -1,12 +1,13 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Count
 
 
 class Venue(models.Model):
     """A location that can host one or more events.
 
-    Capacity cannot be reduced below tickets issued across its events.
+    Capacity applies independently to every event hosted at this venue.
     """
 
     name = models.CharField(
@@ -49,7 +50,9 @@ class Venue(models.Model):
 
     def clean(self):
         super().clean()
-        if self.pk and self.events.filter(tickets__isnull=False).count() > self.capacity:
+        if self.pk and self.capacity is not None and self.events.annotate(
+            ticket_count=Count("tickets")
+        ).filter(ticket_count__gt=self.capacity).exists():
             raise ValidationError(
                 {"capacity": "Capacity cannot be lower than tickets already issued."}
             )
