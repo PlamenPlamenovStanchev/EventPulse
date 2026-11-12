@@ -1,7 +1,34 @@
 {% extends 'base.html' %}
 {% block title %}Tickets · EventPulse{% endblock %}
 {% block content %}
-{% include 'includes/page_header.html' with eyebrow='Ticketing' title='Tickets' description='Reservations and payment status will be managed here.' %}
-{% include 'includes/empty_state.html' with heading='Ticket management is being prepared' message='Ticket records, payment tracking, and capacity-aware workflows will appear in a later build.' %}
-<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+<div class="page-header page-header-with-action">
+    <div><p class="eyebrow">Ticketing</p><h1>Tickets</h1><p>Manage reservations and their payment status.</p></div>
+    <a class="button button-primary" href="{% url 'ticketing:ticket_create' %}">Issue ticket</a>
+</div>
+<form method="get" class="list-controls ticket-list-controls" aria-label="Search, filter, and sort tickets">
+    <div class="control-field"><label for="ticket-search">Search tickets</label><input id="ticket-search" name="q" type="search" value="{{ search_term }}" placeholder="Event, attendee, or email"></div>
+    <div class="control-field"><label for="ticket-event">Event</label><select id="ticket-event" name="event"><option value="">All events</option>{% for event in events %}<option value="{{ event.pk }}"{% if selected_event and selected_event.pk == event.pk %} selected{% endif %}>{{ event.name }}</option>{% endfor %}</select></div>
+    <div class="control-field"><label for="ticket-status">Payment status</label><select id="ticket-status" name="status"><option value="">All statuses</option><option value="PAID"{% if selected_status == "PAID" %} selected{% endif %}>Paid</option><option value="UNPAID"{% if selected_status == "UNPAID" %} selected{% endif %}>Unpaid</option></select></div>
+    <div class="control-field"><label for="ticket-sort">Sort tickets</label><select id="ticket-sort" name="sort"><option value="newest"{% if sort == "newest" %} selected{% endif %}>Newest issued</option><option value="oldest"{% if sort == "oldest" %} selected{% endif %}>Oldest issued</option><option value="price"{% if sort == "price" %} selected{% endif %}>Price: low to high</option><option value="-price"{% if sort == "-price" %} selected{% endif %}>Price: high to low</option><option value="event_date"{% if sort == "event_date" %} selected{% endif %}>Event date</option></select></div>
+    <div class="control-actions"><button class="button button-primary" type="submit">Apply</button><a class="button button-secondary" href="{% url 'ticketing:ticket_list' %}">Reset filters</a></div>
+</form>
+<p class="list-result-count" aria-live="polite">{{ matching_ticket_count }} ticket{{ matching_ticket_count|pluralize }} found</p>
+{% if tickets %}
+    <div class="table-wrap" tabindex="0" aria-label="Scrollable ticket table">
+        <table class="data-table">
+            <caption class="visually-hidden">Tickets</caption>
+            <thead><tr><th scope="col">Ticket ID</th><th scope="col">Event</th><th scope="col">Attendee</th><th scope="col">Price</th><th scope="col">Payment status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>{% for ticket in tickets %}<tr>
+                <td data-label="Ticket ID"><a class="table-link" href="{% url 'ticketing:ticket_detail' ticket.pk %}">#{{ ticket.pk }}</a></td>
+                <td data-label="Event"><a class="table-link" href="{% url 'events:event_detail' ticket.event.pk %}">{{ ticket.event.name }}</a><span class="table-secondary">{{ ticket.event.venue.name }}</span></td>
+                <td data-label="Attendee"><a class="table-link" href="{% url 'attendees:attendee_detail' ticket.attendee.pk %}">{{ ticket.attendee.name }}</a><span class="table-secondary">{{ ticket.attendee.email }}</span></td>
+                <td data-label="Price">{{ ticket.price|floatformat:2 }}</td>
+                <td data-label="Payment status"><span class="status-badge {% if ticket.status == 'PAID' %}status-paid{% else %}status-unpaid{% endif %}">{{ ticket.get_status_display }}</span></td>
+                <td class="table-actions" data-label="Actions"><a href="{% url 'ticketing:ticket_detail' ticket.pk %}">View<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a><a href="{% url 'ticketing:ticket_update' ticket.pk %}">Edit<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a><a class="danger-link" href="{% url 'ticketing:ticket_delete' ticket.pk %}">Delete<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a></td>
+            </tr>{% endfor %}</tbody>
+        </table>
+    </div>
+{% else %}
+    <section class="empty-state" aria-label="No tickets"><span class="empty-state-icon" aria-hidden="true">+</span><div><h2>{% if search_term or selected_event or selected_status %}No tickets match these filters{% else %}Issue your first ticket{% endif %}</h2><p>{% if search_term or selected_event or selected_status %}Try another search or filter combination, or reset the current filters.{% else %}Create an event and attendee, then reserve a place for them.{% endif %}</p></div>{% if search_term or selected_event or selected_status %}<a class="button button-secondary" href="{% url 'ticketing:ticket_list' %}">Reset filters</a>{% else %}<a class="button button-primary" href="{% url 'ticketing:ticket_create' %}">Issue ticket</a>{% endif %}</section>
+{% endif %}
 {% endblock %}

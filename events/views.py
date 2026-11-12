@@ -49,7 +49,9 @@ class EventDetailView(DetailView):
 
     def get_queryset(self):
         money_field = DecimalField(max_digits=10, decimal_places=2)
-        return Event.objects.select_related("venue").annotate(
+        return Event.objects.select_related("venue").prefetch_related(
+            "tickets__attendee"
+        ).annotate(
             ticket_count=Count("tickets"),
             expected_revenue=Coalesce(
                 Sum("tickets__price"), Value(Decimal("0.00")), output_field=money_field

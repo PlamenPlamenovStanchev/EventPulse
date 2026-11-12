@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Delete ticket · EventPulse{% endblock %}
+{% block content %}
+<section class="confirmation-panel">
+    <p class="eyebrow">Confirm deletion</p>
+    <h1>Delete ticket #{{ ticket.pk }}?</h1>
+    <p>This permanently removes {{ ticket.attendee.name }}'s reservation for {{ ticket.event.name }} at {{ ticket.event.venue.name }}.</p>
+    <form method="post" class="form-actions">{% csrf_token %}<button class="button button-danger" type="submit">Delete ticket</button><a class="button button-secondary" href="{% url 'ticketing:ticket_detail' ticket.pk %}">Cancel</a></form>
+</section>
+{% endblock %}

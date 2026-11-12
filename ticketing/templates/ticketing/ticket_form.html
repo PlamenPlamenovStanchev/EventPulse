@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}{% if form.instance.pk %}Edit ticket{% else %}Create ticket{% endif %} · EventPulse{% endblock %}
+{% block content %}
+<div class="page-header"><p class="eyebrow">Ticket management</p><h1>{% if form.instance.pk %}Edit ticket #{{ form.instance.pk }}{% else %}Issue ticket{% endif %}</h1><p>{% if form.instance.pk %}Update this reservation and payment status. Capacity is checked again before changes are saved.{% else %}Reserve one place for an attendee at an event. Capacity and duplicate reservations are checked before issue.{% endif %}</p></div>
+{% if not form.instance.pk and not can_create_ticket %}
+    <section class="empty-state" aria-label="Ticket prerequisites">
+        <span class="empty-state-icon" aria-hidden="true">+</span>
+        <div><h2>Create ticket prerequisites first</h2><p>A ticket needs both an event and an attendee before it can be issued. Create the missing records, then return here to reserve a place.</p></div>
+        <div class="button-group">{% if not has_events %}<a class="button button-primary" href="{% url 'events:event_create' %}">Create event</a>{% endif %}{% if not has_attendees %}<a class="button button-secondary" href="{% url 'attendees:attendee_create' %}">Create attendee</a>{% endif %}</div>
+    </section>
+{% else %}
+    <form method="post" class="entity-form" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-errors" role="alert" aria-labelledby="form-errors-title"><h2 id="form-errors-title">Ticket could not be saved</h2>{{ form.non_field_errors }}</div>{% endif %}
+        <p class="form-intro"><span aria-hidden="true">*</span> Required fields. The details you entered remain available for correction if validation fails.</p>
+        {% for field in form %}<div class="form-field{% if field.errors %} has-error{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span>{% endif %}</label>{{ field }}{% if field.help_text %}<p class="help-text">{{ field.help_text }}</p>{% endif %}{% if field.errors %}<div class="field-errors" role="alert"><p>{{ field.label }} needs attention:</p>{{ field.errors }}</div>{% endif %}</div>{% endfor %}
+        <div class="form-actions"><button class="button button-primary" type="submit">{% if form.instance.pk %}Save changes{% else %}Create ticket{% endif %}</button><a class="button button-secondary" href="{% if form.instance.pk %}{% url 'ticketing:ticket_detail' form.instance.pk %}{% else %}{% url 'ticketing:ticket_list' %}{% endif %}">Cancel</a></div>
+    </form>
+{% endif %}
+{% endblock %}

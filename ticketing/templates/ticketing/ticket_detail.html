@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Ticket for {{ ticket.attendee.name }} · EventPulse{% endblock %}
+{% block content %}
+<div class="page-header page-header-with-action">
+    <div><p class="eyebrow">Ticket #{{ ticket.pk }}</p><h1>{{ ticket.attendee.name }}</h1><p>{{ ticket.event.name }} · <span class="status-badge {% if ticket.status == 'PAID' %}status-paid{% else %}status-unpaid{% endif %}">{{ ticket.get_status_display }}</span></p></div>
+    <div class="button-group"><a class="button button-secondary" href="{% url 'ticketing:ticket_update' ticket.pk %}">Edit ticket</a><a class="button button-danger" href="{% url 'ticketing:ticket_delete' ticket.pk %}">Delete ticket</a></div>
+</div>
+<section class="detail-grid" aria-label="Ticket information">
+    <div class="detail-card"><p class="section-label">Event</p><p><a class="table-link" href="{% url 'events:event_detail' ticket.event.pk %}">{{ ticket.event.name }}</a></p><span>Venue: {{ ticket.event.venue.name }}</span></div>
+    <div class="detail-card"><p class="section-label">Attendee</p><p><a class="table-link" href="{% url 'attendees:attendee_detail' ticket.attendee.pk %}">{{ ticket.attendee.name }}</a></p><span>{{ ticket.attendee.email }}</span></div>
+    <div class="detail-card"><p class="section-label">Ticket price</p><strong>{{ ticket.price|floatformat:2 }}</strong></div>
+    <div class="detail-card"><p class="section-label">Payment status</p><strong>{{ ticket.get_status_display }}</strong>{% if ticket.status == 'PAID' %}<span>Paid on {{ ticket.payment_date|date:"j M Y" }} by {{ ticket.get_payment_method_display }}</span>{% else %}<span>Payment details are not recorded for unpaid tickets.</span>{% endif %}</div>
+    <div class="detail-card"><p class="section-label">Issued</p><strong>{{ ticket.created_at|date:"j M Y" }}</strong><span>{{ ticket.created_at|date:"H:i" }}</span></div>
+</section>
+<a class="text-link" href="{% url 'ticketing:ticket_list' %}">Back to tickets</a>
+{% endblock %}

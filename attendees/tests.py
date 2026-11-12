@@ -196,6 +196,9 @@ class AttendeeCrudViewTests(TestCase):
         self.assertContains(list_response, attendee.phone)
         self.assertContains(detail_response, ticket.event.name)
         self.assertContains(detail_response, "Unpaid")
+        self.assertContains(
+            detail_response, reverse("ticketing:ticket_detail", args=[ticket.pk])
+        )
 
     def test_detail_shows_empty_ticket_state(self):
         attendee = self.create_attendee()

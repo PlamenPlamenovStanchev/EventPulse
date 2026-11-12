@@ -12,7 +12,7 @@
 <section class="related-section">
     <div class="section-heading"><div><p class="section-label">Related tickets</p><h2>Events this attendee is attending</h2></div></div>
     {% if attendee.tickets.all %}
-        <ul class="related-list">{% for ticket in attendee.tickets.all %}<li><strong>{{ ticket.event.name }}</strong><span>{{ ticket.event.starts_at|date:"j M Y, H:i" }} · {{ ticket.get_status_display }}</span></li>{% endfor %}</ul>
+        <ul class="related-list">{% for ticket in attendee.tickets.all %}<li><strong><a class="table-link" href="{% url 'ticketing:ticket_detail' ticket.pk %}">{{ ticket.event.name }}</a></strong><span>{{ ticket.event.starts_at|date:"j M Y, H:i" }} · {{ ticket.get_status_display }}</span></li>{% endfor %}</ul>
     {% else %}
         <p class="muted-copy">This attendee does not have any tickets yet.</p>
     {% endif %}
