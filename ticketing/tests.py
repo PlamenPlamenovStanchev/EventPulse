@@ -4,14 +4,14 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from attendees.models import Attendee
 from events.models import Event, Venue
 
-from .forms import TicketForm
+from .forms import PaymentForm, TicketForm
 from .models import Ticket
 
 
@@ -565,6 +565,434 @@ class DomainEmptyDatabaseTests(TestCase):
         self.assertEqual(Event.objects.count(), 0)
         self.assertEqual(Attendee.objects.count(), 0)
         self.assertEqual(Ticket.objects.count(), 0)
+
+
+class PaymentFormTests(TestCase):
+    def setUp(self):
+        self.venue = Venue.objects.create(
+            name="Payment Hall", address="3 Payment Street", capacity=2
+        )
+        self.event = Event.objects.create(
+            name="Payment Workshop",
+            starts_at="2026-12-10T09:00:00Z",
+            description="An event used to verify payment recording.",
+            venue=self.venue,
+        )
+        self.attendee = Attendee.objects.create(
+            name="Payton", email="payton@example.com", phone="555-0110"
+        )
+
+    def create_ticket(self, **overrides):
+        values = {"event": self.event, "attendee": self.attendee, "price": Decimal("25.00")}
+        values.update(overrides)
+        return Ticket.objects.create(**values)
+
+    def payment_data(self, **overrides):
+        values = {
+            "payment_date": "2026-12-01",
+            "payment_method": Ticket.PaymentMethod.CARD,
+        }
+        values.update(overrides)
+        return values
+
+    def test_valid_payment_details_are_valid_without_persisting(self):
+        ticket = self.create_ticket()
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(data=self.payment_data(), instance=ticket)
+
+        self.assertTrue(form.is_valid())
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+        self.assertIsNone(ticket.payment_date)
+        self.assertIsNone(ticket.payment_method)
+
+    def test_paid_ticket_requires_payment_date(self):
+        ticket = self.create_ticket()
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(data=self.payment_data(payment_date=""), instance=ticket)
+
+        self.assertFalse(form.is_valid())
+        self.assertFormError(form, "payment_date", "Paid tickets require a payment date.")
+
+    def test_paid_ticket_requires_payment_method(self):
+        ticket = self.create_ticket()
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(data=self.payment_data(payment_method=""), instance=ticket)
+
+        self.assertFalse(form.is_valid())
+        self.assertFormError(form, "payment_method", "Paid tickets require a payment method.")
+
+    def test_invalid_payment_date_is_rejected(self):
+        ticket = self.create_ticket()
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(
+            data=self.payment_data(payment_date="not-a-date"), instance=ticket
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Enter a valid payment date.", form.errors["payment_date"])
+
+    def test_editing_existing_ticket_preserves_unrelated_fields(self):
+        ticket = self.create_ticket()
+        created_at = ticket.created_at
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(data=self.payment_data(), instance=ticket)
+
+        self.assertTrue(form.is_valid())
+        updated_ticket = form.save()
+        updated_ticket.refresh_from_db()
+        self.assertEqual(updated_ticket.event, self.event)
+        self.assertEqual(updated_ticket.attendee, self.attendee)
+        self.assertEqual(updated_ticket.price, Decimal("25.00"))
+        self.assertEqual(updated_ticket.created_at, created_at)
+
+    def test_form_excludes_unrelated_ticket_fields(self):
+        self.assertEqual(list(PaymentForm.base_fields), ["payment_date", "payment_method"])
+
+    def test_zero_price_ticket_can_record_a_payment(self):
+        ticket = self.create_ticket(price=Decimal("0.00"))
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(data=self.payment_data(), instance=ticket)
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.save().price, Decimal("0.00"))
+
+    def test_unpaid_ticket_rejects_payment_metadata_via_model_validation(self):
+        form = PaymentForm(data=self.payment_data(), instance=self.create_ticket())
+
+        self.assertFalse(form.is_valid())
+        self.assertIn(
+            "Unpaid tickets cannot have payment date or payment method details.",
+            form.non_field_errors(),
+        )
+
+
+class PaymentStatusActionTests(TestCase):
+    def setUp(self):
+        self.venue = Venue.objects.create(
+            name="Status Hall", address="4 Payment Street", capacity=2
+        )
+        self.event = Event.objects.create(
+            name="Status Workshop",
+            starts_at="2026-12-11T09:00:00Z",
+            description="An event used to verify payment status actions.",
+            venue=self.venue,
+        )
+        self.attendee = Attendee.objects.create(
+            name="Sam", email="sam@example.com", phone="555-0111"
+        )
+
+    def create_ticket(self, **overrides):
+        values = {"event": self.event, "attendee": self.attendee, "price": Decimal("25.00")}
+        values.update(overrides)
+        return Ticket.objects.create(**values)
+
+    def paid_data(self, **overrides):
+        values = {
+            "payment_date": "2026-12-01",
+            "payment_method": Ticket.PaymentMethod.CARD,
+        }
+        values.update(overrides)
+        return values
+
+    def paid_url(self, ticket):
+        return reverse("ticketing:ticket_mark_paid", args=[ticket.pk])
+
+    def unpaid_url(self, ticket):
+        return reverse("ticketing:ticket_mark_unpaid", args=[ticket.pk])
+
+    def test_unpaid_ticket_can_be_marked_paid(self):
+        ticket = self.create_ticket()
+
+        response = self.client.post(self.paid_url(ticket), self.paid_data(), follow=True)
+
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.PAID)
+        self.assertEqual(ticket.payment_date, date(2026, 12, 1))
+        self.assertEqual(ticket.payment_method, Ticket.PaymentMethod.CARD)
+        self.assertRedirects(response, reverse("ticketing:ticket_detail", args=[ticket.pk]))
+        self.assertContains(response, "Ticket marked as paid.")
+
+    def test_paid_ticket_can_be_marked_unpaid_and_payment_details_are_cleared(self):
+        ticket = self.create_ticket(
+            status=Ticket.Status.PAID,
+            payment_date=date(2026, 12, 1),
+            payment_method=Ticket.PaymentMethod.CARD,
+        )
+
+        response = self.client.post(self.unpaid_url(ticket), follow=True)
+
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+        self.assertIsNone(ticket.payment_date)
+        self.assertIsNone(ticket.payment_method)
+        self.assertContains(response, "Ticket marked as unpaid.")
+
+    def test_paid_action_requires_payment_date_and_does_not_persist(self):
+        ticket = self.create_ticket()
+
+        response = self.client.post(self.paid_url(ticket), self.paid_data(payment_date=""))
+
+        ticket.refresh_from_db()
+        self.assertFormError(response.context["form"], "payment_date", "Paid tickets require a payment date.")
+        self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+        self.assertIsNone(ticket.payment_date)
+        self.assertIsNone(ticket.payment_method)
+
+    def test_paid_action_requires_payment_method_and_rejects_invalid_dates(self):
+        ticket = self.create_ticket()
+
+        missing_method = self.client.post(
+            self.paid_url(ticket), self.paid_data(payment_method="")
+        )
+        invalid_date = self.client.post(
+            self.paid_url(ticket), self.paid_data(payment_date="not-a-date")
+        )
+
+        ticket.refresh_from_db()
+        self.assertFormError(
+            missing_method.context["form"], "payment_method", "Paid tickets require a payment method."
+        )
+        self.assertIn("Enter a valid payment date.", invalid_date.context["form"].errors["payment_date"])
+        self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+
+    def test_zero_price_ticket_can_be_marked_paid(self):
+        ticket = self.create_ticket(price=Decimal("0.00"))
+
+        self.client.post(self.paid_url(ticket), self.paid_data())
+
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.PAID)
+        self.assertEqual(ticket.price, Decimal("0.00"))
+
+    def test_get_actions_do_not_mutate_ticket(self):
+        unpaid_ticket = self.create_ticket()
+        paid_ticket = self.create_ticket(
+            attendee=Attendee.objects.create(
+                name="Parker", email="parker@example.com", phone="555-0112"
+            ),
+            status=Ticket.Status.PAID,
+            payment_date=date(2026, 12, 1),
+            payment_method=Ticket.PaymentMethod.CASH,
+        )
+
+        paid_response = self.client.get(self.paid_url(unpaid_ticket))
+        unpaid_response = self.client.get(self.unpaid_url(paid_ticket))
+
+        unpaid_ticket.refresh_from_db()
+        paid_ticket.refresh_from_db()
+        self.assertEqual(paid_response.status_code, 200)
+        self.assertEqual(unpaid_response.status_code, 200)
+        self.assertEqual(unpaid_ticket.status, Ticket.Status.UNPAID)
+        self.assertEqual(paid_ticket.status, Ticket.Status.PAID)
+
+    def test_forged_status_does_not_override_server_defined_transition(self):
+        ticket = self.create_ticket()
+
+        self.client.post(self.paid_url(ticket), self.paid_data(status=Ticket.Status.UNPAID))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.PAID)
+
+        self.client.post(self.unpaid_url(ticket), {"status": Ticket.Status.PAID})
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+
+    def test_actions_preserve_unrelated_fields_and_repeated_post_does_not_write_again(self):
+        ticket = self.create_ticket()
+        original_created_at = ticket.created_at
+
+        self.client.post(self.paid_url(ticket), self.paid_data())
+        ticket.refresh_from_db()
+        original_payment_date = ticket.payment_date
+        self.client.post(self.paid_url(ticket), self.paid_data(payment_date="2026-12-02"))
+        ticket.refresh_from_db()
+
+        self.assertEqual(ticket.event, self.event)
+        self.assertEqual(ticket.attendee, self.attendee)
+        self.assertEqual(ticket.price, Decimal("25.00"))
+        self.assertEqual(ticket.created_at, original_created_at)
+        self.assertEqual(ticket.payment_date, original_payment_date)
+
+    def test_already_target_state_is_safe_and_unknown_tickets_return_404(self):
+        unpaid_ticket = self.create_ticket()
+        paid_ticket = self.create_ticket(
+            attendee=Attendee.objects.create(
+                name="Riley", email="riley@example.com", phone="555-0113"
+            ),
+            status=Ticket.Status.PAID,
+            payment_date=date(2026, 12, 1),
+            payment_method=Ticket.PaymentMethod.CARD,
+        )
+
+        unpaid_response = self.client.post(self.unpaid_url(unpaid_ticket), follow=True)
+        paid_response = self.client.post(self.paid_url(paid_ticket), self.paid_data(), follow=True)
+
+        self.assertContains(unpaid_response, "This ticket is already marked as unpaid.")
+        self.assertContains(paid_response, "This ticket is already marked as paid.")
+        self.assertEqual(self.client.get(reverse("ticketing:ticket_mark_paid", args=[999])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("ticketing:ticket_mark_unpaid", args=[999])).status_code, 404)
+
+    def test_payment_actions_require_csrf_tokens(self):
+        ticket = self.create_ticket()
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        paid_response = csrf_client.post(self.paid_url(ticket), self.paid_data())
+        unpaid_response = csrf_client.post(self.unpaid_url(ticket))
+
+        ticket.refresh_from_db()
+        self.assertEqual(paid_response.status_code, 403)
+        self.assertEqual(unpaid_response.status_code, 403)
+        self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+
+
+class TrackerTests(TestCase):
+    def setUp(self):
+        self.venue = Venue.objects.create(
+            name="Tracker Hall", address="5 Revenue Street", capacity=10
+        )
+        self.alpha_event = Event.objects.create(
+            name="Alpha Summit",
+            starts_at="2026-12-12T09:00:00Z",
+            description="An event used to verify tracker calculations.",
+            venue=self.venue,
+        )
+        self.beta_event = Event.objects.create(
+            name="Beta Workshop",
+            starts_at="2026-12-13T09:00:00Z",
+            description="Another event used to verify tracker calculations.",
+            venue=self.venue,
+        )
+
+    def create_ticket(self, attendee_name, email, **overrides):
+        attendee = Attendee.objects.create(name=attendee_name, email=email, phone="555-0120")
+        values = {"event": self.alpha_event, "attendee": attendee, "price": Decimal("10.00")}
+        values.update(overrides)
+        return Ticket.objects.create(**values)
+
+    def tracker(self, **params):
+        return self.client.get(reverse("ticketing:tracker"), params)
+
+    def test_empty_tracker_uses_zero_decimal_metrics_and_empty_state(self):
+        response = self.tracker()
+
+        self.assertEqual(response.context["expected_revenue"], Decimal("0.00"))
+        self.assertEqual(response.context["collected_revenue"], Decimal("0.00"))
+        self.assertEqual(response.context["outstanding_revenue"], Decimal("0.00"))
+        self.assertEqual(response.context["collection_percentage"], Decimal("0.00"))
+        self.assertEqual(response.context["matching_ticket_count"], 0)
+        self.assertContains(response, "No tickets to monitor yet")
+
+    def test_mixed_ticket_kpis_use_payment_status_and_decimal_values(self):
+        self.create_ticket(
+            "Alex", "alex-tracker@example.com", price=Decimal("30.00"),
+            status=Ticket.Status.PAID, payment_date=date(2026, 12, 1),
+            payment_method=Ticket.PaymentMethod.CARD,
+        )
+        self.create_ticket("Blair", "blair-tracker@example.com", price=Decimal("20.00"))
+        self.create_ticket("Casey", "casey-tracker@example.com", price=Decimal("0.00"))
+
+        response = self.tracker()
+
+        self.assertEqual(response.context["expected_revenue"], Decimal("50"))
+        self.assertEqual(response.context["collected_revenue"], Decimal("30"))
+        self.assertEqual(response.context["outstanding_revenue"], Decimal("20"))
+        self.assertEqual(response.context["paid_ticket_count"], 1)
+        self.assertEqual(response.context["unpaid_ticket_count"], 2)
+        self.assertEqual(response.context["collection_percentage"], Decimal("60.0"))
+
+    def test_fully_paid_and_fully_unpaid_sets_are_calculated_correctly(self):
+        paid = self.create_ticket(
+            "Dana", "dana-tracker@example.com", price=Decimal("15.00"),
+            status=Ticket.Status.PAID, payment_date=date(2026, 12, 1),
+            payment_method=Ticket.PaymentMethod.CASH,
+        )
+        paid_response = self.tracker()
+        paid.delete()
+        self.create_ticket("Evan", "evan-tracker@example.com", price=Decimal("15.00"))
+        unpaid_response = self.tracker()
+
+        self.assertEqual(paid_response.context["collection_percentage"], Decimal("100"))
+        self.assertEqual(paid_response.context["outstanding_revenue"], Decimal("0"))
+        self.assertEqual(unpaid_response.context["collection_percentage"], Decimal("0"))
+        self.assertEqual(unpaid_response.context["collected_revenue"], Decimal("0"))
+
+    def test_zero_price_tickets_do_not_cause_division_errors(self):
+        self.create_ticket("Free", "free-tracker@example.com", price=Decimal("0.00"))
+
+        response = self.tracker()
+
+        self.assertEqual(response.context["expected_revenue"], Decimal("0"))
+        self.assertEqual(response.context["collection_percentage"], Decimal("0.00"))
+
+    def test_search_matches_event_attendee_and_email(self):
+        alpha_ticket = self.create_ticket("Alex Morgan", "alex@example.com")
+        beta_ticket = self.create_ticket(
+            "Blair Stone", "blair@example.com", event=self.beta_event
+        )
+
+        expected = {
+            "ALPHA": [alpha_ticket],
+            "blair": [beta_ticket],
+            "ALEX@EXAMPLE.COM": [alpha_ticket],
+        }
+        for query, tickets in expected.items():
+            with self.subTest(query=query):
+                response = self.tracker(q=query)
+                self.assertEqual(list(response.context["tickets"]), tickets)
+                self.assertEqual(response.context["matching_ticket_count"], len(tickets))
+
+    def test_valid_filters_apply_only_to_tracker_table_and_invalid_filters_are_safe(self):
+        paid_ticket = self.create_ticket(
+            "Alex", "filters-alex@example.com", price=Decimal("30.00"),
+            status=Ticket.Status.PAID, payment_date=date(2026, 12, 1),
+            payment_method=Ticket.PaymentMethod.CARD,
+        )
+        unpaid_ticket = self.create_ticket(
+            "Blair", "filters-blair@example.com", event=self.beta_event, price=Decimal("20.00")
+        )
+
+        filtered = self.tracker(event=self.alpha_event.pk, status=Ticket.Status.PAID)
+        invalid = self.tracker(event="not-an-id", status="SETTLED")
+
+        self.assertEqual(list(filtered.context["tickets"]), [paid_ticket])
+        self.assertEqual(filtered.context["matching_ticket_count"], 1)
+        self.assertEqual(filtered.context["expected_revenue"], Decimal("50"))
+        self.assertEqual(filtered.context["collected_revenue"], Decimal("30"))
+        self.assertEqual(list(invalid.context["tickets"]), [paid_ticket, unpaid_ticket])
+        self.assertIsNone(invalid.context["selected_event"])
+        self.assertEqual(invalid.context["selected_status"], "")
+
+    def test_tracker_displays_payment_action_links_for_each_status(self):
+        unpaid_ticket = self.create_ticket("Alex", "links-alex@example.com")
+        paid_ticket = self.create_ticket(
+            "Blair", "links-blair@example.com", status=Ticket.Status.PAID,
+            payment_date=date(2026, 12, 1), payment_method=Ticket.PaymentMethod.CARD,
+        )
+
+        response = self.tracker()
+
+        self.assertContains(response, reverse("ticketing:ticket_mark_paid", args=[unpaid_ticket.pk]))
+        self.assertContains(response, reverse("ticketing:ticket_mark_unpaid", args=[paid_ticket.pk]))
+
+    def test_tracker_metrics_refresh_after_valid_and_invalid_payment_submissions(self):
+        ticket = self.create_ticket("Alex", "transition-alex@example.com", price=Decimal("25.00"))
+        before = self.tracker()
+        invalid = self.client.post(
+            reverse("ticketing:ticket_mark_paid", args=[ticket.pk]),
+            {"payment_date": "", "payment_method": Ticket.PaymentMethod.CARD},
+        )
+        after_invalid = self.tracker()
+        self.client.post(
+            reverse("ticketing:ticket_mark_paid", args=[ticket.pk]),
+            {"payment_date": "2026-12-01", "payment_method": Ticket.PaymentMethod.CARD},
+        )
+        after_paid = self.tracker()
+
+        self.assertEqual(invalid.status_code, 200)
+        self.assertEqual(before.context["collected_revenue"], Decimal("0"))
+        self.assertEqual(after_invalid.context["collected_revenue"], Decimal("0"))
+        self.assertEqual(after_paid.context["collected_revenue"], Decimal("25"))
+        self.assertEqual(after_paid.context["outstanding_revenue"], Decimal("0"))
 
 
 class TicketCrudViewTests(TestCase):

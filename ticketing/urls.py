@@ -11,6 +11,8 @@ urlpatterns = [
     path('tickets/<int:pk>/', views.TicketDetailView.as_view(), name='ticket_detail'),
     path('tickets/<int:pk>/edit/', views.TicketUpdateView.as_view(), name='ticket_update'),
     path('tickets/<int:pk>/delete/', views.TicketDeleteView.as_view(), name='ticket_delete'),
+    path('tickets/<int:pk>/mark-paid/', views.mark_ticket_paid, name='ticket_mark_paid'),
+    path('tickets/<int:pk>/mark-unpaid/', views.mark_ticket_unpaid, name='ticket_mark_unpaid'),
     path('tracker/', views.tracker, name='tracker'),
     path('insights/', views.insights, name='insights'),
 ]

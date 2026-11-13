@@ -1,7 +1,29 @@
 {% extends 'base.html' %}
 {% block title %}Tracker · EventPulse{% endblock %}
 {% block content %}
-{% include 'includes/page_header.html' with eyebrow='Operations tracker' title='Tracker' description='A future operational view for event readiness and follow-up.' %}
-{% include 'includes/empty_state.html' with heading='No activity to track yet' message='The tracker will surface operational signals once events, attendees, and tickets are available.' %}
-<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+<div class="page-header"><p class="eyebrow">Payment monitoring</p><h1>Tracker</h1><p>Overall collection totals are based on every issued ticket. Search and filters affect only the table below.</p></div>
+<section aria-labelledby="tracker-kpis"><div class="section-heading"><h2 id="tracker-kpis">Overall financial position</h2><p class="section-note">These totals are not changed by table filters.</p></div><div class="kpi-grid">
+    <article class="kpi-card"><p>Overall expected revenue</p><strong>{{ expected_revenue|floatformat:2 }}</strong><span>All issued tickets</span></article>
+    <article class="kpi-card"><p>Overall collected revenue</p><strong>{{ collected_revenue|floatformat:2 }}</strong><span>Paid tickets only</span></article>
+    <article class="kpi-card"><p>Overall outstanding revenue</p><strong>{{ outstanding_revenue|floatformat:2 }}</strong><span>Expected minus collected</span></article>
+    <article class="kpi-card"><p>Collection percentage</p><strong>{{ collection_percentage|floatformat:1 }}%</strong><progress class="collection-progress" value="{{ collection_percentage }}" max="100" aria-label="{{ collection_percentage|floatformat:1 }} percent of overall expected revenue collected">{{ collection_percentage|floatformat:1 }}%</progress><span>{{ paid_ticket_count }} paid · {{ unpaid_ticket_count }} unpaid</span></article>
+</div></section>
+<section class="related-section" aria-labelledby="tracker-records"><div class="section-heading"><h2 id="tracker-records">Ticket payment records</h2><p class="section-note">Update payment status from the matching ticket.</p></div>
+<form method="get" class="list-controls" aria-label="Search and filter payment records">
+    <div class="control-field"><label for="tracker-search">Search payments</label><input id="tracker-search" name="q" type="search" value="{{ search_term }}" placeholder="Event, attendee, or email"></div>
+    <div class="control-field"><label for="tracker-event">Event</label><select id="tracker-event" name="event"><option value="">All events</option>{% for event in events %}<option value="{{ event.pk }}"{% if selected_event and selected_event.pk == event.pk %} selected{% endif %}>{{ event.name }}</option>{% endfor %}</select></div>
+    <div class="control-field"><label for="tracker-status">Payment status</label><select id="tracker-status" name="status"><option value="">All statuses</option><option value="PAID"{% if selected_status == 'PAID' %} selected{% endif %}>Paid</option><option value="UNPAID"{% if selected_status == 'UNPAID' %} selected{% endif %}>Unpaid</option></select></div>
+    <div class="control-actions"><button class="button button-primary" type="submit">Apply</button><a class="button button-secondary" href="{% url 'ticketing:tracker' %}">Reset filters</a></div>
+</form>
+<p class="list-result-count" aria-live="polite">{{ matching_ticket_count }} payment record{{ matching_ticket_count|pluralize }} found</p>
+{% if tickets %}<div class="table-wrap" tabindex="0" aria-label="Scrollable payment tracker table"><table class="data-table"><caption class="visually-hidden">Ticket payment records</caption><thead><tr><th scope="col">Event</th><th scope="col">Attendee</th><th scope="col">Ticket price</th><th scope="col">Status</th><th scope="col">Payment date</th><th scope="col">Payment method</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead><tbody>{% for ticket in tickets %}<tr>
+    <td data-label="Event"><a class="table-link" href="{% url 'events:event_detail' ticket.event.pk %}">{{ ticket.event.name }}</a><span class="table-secondary">{{ ticket.event.venue.name }}</span></td>
+    <td data-label="Attendee"><a class="table-link" href="{% url 'attendees:attendee_detail' ticket.attendee.pk %}">{{ ticket.attendee.name }}</a><span class="table-secondary">{{ ticket.attendee.email }}</span></td>
+    <td data-label="Ticket price">{{ ticket.price|floatformat:2 }}</td>
+    <td data-label="Status"><span class="status-badge {% if ticket.status == 'PAID' %}status-paid{% else %}status-unpaid{% endif %}">{{ ticket.get_status_display }}</span></td>
+    <td data-label="Payment date">{% if ticket.payment_date %}{{ ticket.payment_date|date:"j M Y" }}{% else %}—{% endif %}</td>
+    <td data-label="Payment method">{% if ticket.payment_method %}{{ ticket.get_payment_method_display }}{% else %}—{% endif %}</td>
+    <td class="table-actions" data-label="Action">{% if ticket.status == 'PAID' %}<a href="{% url 'ticketing:ticket_mark_unpaid' ticket.pk %}">Mark as unpaid<span class="visually-hidden"> for {{ ticket.attendee.name }}</span></a>{% else %}<a href="{% url 'ticketing:ticket_mark_paid' ticket.pk %}">Mark as paid<span class="visually-hidden"> for {{ ticket.attendee.name }}</span></a>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% else %}<section class="empty-state" aria-label="No payment records"><span class="empty-state-icon" aria-hidden="true">+</span><div><h2>{% if search_term or selected_event or selected_status %}No payment records match these filters{% else %}No tickets to monitor yet{% endif %}</h2><p>{% if search_term or selected_event or selected_status %}Try another search or filter combination, or reset the current filters.{% else %}Issue a ticket to begin monitoring expected and collected revenue.{% endif %}</p></div>{% if search_term or selected_event or selected_status %}<a class="button button-secondary" href="{% url 'ticketing:tracker' %}">Reset filters</a>{% else %}<a class="button button-primary" href="{% url 'ticketing:ticket_create' %}">Issue ticket</a>{% endif %}</section>{% endif %}
 {% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}{% if target_status == 'PAID' %}Mark ticket as paid{% else %}Mark ticket as unpaid{% endif %} · EventPulse{% endblock %}
+{% block content %}
+<div class="page-header"><p class="eyebrow">Payment status</p><h1>{% if target_status == 'PAID' %}Mark ticket as paid{% else %}Mark ticket as unpaid{% endif %}</h1><p>{% if target_status == 'PAID' %}Record the payment details for this ticket. Payment is not recorded until you confirm below.{% else %}Clear the recorded payment details and return this ticket to unpaid status.{% endif %}</p></div>
+<section class="detail-grid" aria-label="Ticket payment confirmation">
+    <div class="detail-card"><p class="section-label">Event</p><strong>{{ ticket.event.name }}</strong></div>
+    <div class="detail-card"><p class="section-label">Attendee</p><strong>{{ ticket.attendee.name }}</strong><span>{{ ticket.attendee.email }}</span></div>
+    <div class="detail-card"><p class="section-label">Ticket price</p><strong>{{ ticket.price|floatformat:2 }}</strong></div>
+    <div class="detail-card"><p class="section-label">Current status</p><strong>{{ ticket.get_status_display }}</strong></div>
+</section>
+{% if target_status == 'PAID' and ticket.status == 'PAID' or target_status == 'UNPAID' and ticket.status == 'UNPAID' %}
+<section class="empty-state" aria-label="Current payment status"><div><h2>No update needed</h2><p>This ticket is already marked as {{ ticket.get_status_display|lower }}.</p></div></section>
+<div class="form-actions"><a class="button button-secondary" href="{% url 'ticketing:ticket_detail' ticket.pk %}">Back to ticket</a></div>
+{% else %}
+<form method="post" class="entity-form" novalidate>
+    {% csrf_token %}
+    {% if form and form.non_field_errors %}<div class="form-errors" role="alert"><h2>Payment status could not be updated</h2>{{ form.non_field_errors }}</div>{% endif %}
+    {% if target_status == 'PAID' %}{% for field in form %}<div class="form-field{% if field.errors %} has-error{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span aria-hidden="true"> *</span>{% endif %}</label>{{ field }}{% if field.help_text %}<p class="help-text">{{ field.help_text }}</p>{% endif %}{% if field.errors %}<div class="field-errors" role="alert"><p>{{ field.label }} needs attention:</p>{{ field.errors }}</div>{% endif %}</div>{% endfor %}{% endif %}
+    <div class="form-actions"><button class="button {% if target_status == 'PAID' %}button-primary{% else %}button-danger{% endif %}" type="submit">Confirm: mark as {{ target_status|lower }}</button><a class="button button-secondary" href="{% url 'ticketing:ticket_detail' ticket.pk %}">Cancel</a></div>
+</form>
+{% endif %}
+{% endblock %}

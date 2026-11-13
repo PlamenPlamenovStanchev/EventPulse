@@ -122,3 +122,29 @@ class TicketForm(forms.ModelForm):
             "starts_at", "name"
         )
         self.fields["attendee"].queryset = Attendee.objects.order_by("name", "email")
+
+
+class PaymentForm(forms.ModelForm):
+    """Collect payment details while the caller determines the payment status."""
+    payment_date = forms.DateField(
+        required=False,
+        input_formats=["%Y-%m-%d"],
+        label="Payment date",
+        help_text="Required when the ticket is paid.",
+        widget=forms.DateInput(
+            format="%Y-%m-%d", attrs={"type": "date"}
+        ),
+        error_messages={"invalid": "Enter a valid payment date."},
+    )
+    payment_method = forms.TypedChoiceField(
+        required=False,
+        choices=[("", "Select a payment method")] + list(Ticket.PaymentMethod.choices),
+        empty_value=None,
+        label="Payment method",
+        help_text="Required when the ticket is paid.",
+        error_messages={"invalid_choice": "Select a valid payment method."},
+    )
+
+    class Meta:
+        model = Ticket
+        fields = ["payment_date", "payment_method"]

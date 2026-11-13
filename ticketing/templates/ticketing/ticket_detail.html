@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-header page-header-with-action">
     <div><p class="eyebrow">Ticket #{{ ticket.pk }}</p><h1>{{ ticket.attendee.name }}</h1><p>{{ ticket.event.name }} · <span class="status-badge {% if ticket.status == 'PAID' %}status-paid{% else %}status-unpaid{% endif %}">{{ ticket.get_status_display }}</span></p></div>
-    <div class="button-group"><a class="button button-secondary" href="{% url 'ticketing:ticket_update' ticket.pk %}">Edit ticket</a><a class="button button-danger" href="{% url 'ticketing:ticket_delete' ticket.pk %}">Delete ticket</a></div>
+    <div class="button-group"><a class="button button-secondary" href="{% url 'ticketing:ticket_update' ticket.pk %}">Edit ticket</a>{% if ticket.status == 'UNPAID' %}<a class="button button-primary" href="{% url 'ticketing:ticket_mark_paid' ticket.pk %}">Mark as paid</a>{% else %}<a class="button button-secondary" href="{% url 'ticketing:ticket_mark_unpaid' ticket.pk %}">Mark as unpaid</a>{% endif %}<a class="button button-danger" href="{% url 'ticketing:ticket_delete' ticket.pk %}">Delete ticket</a></div>
 </div>
 <section class="detail-grid" aria-label="Ticket information">
     <div class="detail-card"><p class="section-label">Event</p><p><a class="table-link" href="{% url 'events:event_detail' ticket.event.pk %}">{{ ticket.event.name }}</a></p><span>Venue: {{ ticket.event.venue.name }}</span></div>
