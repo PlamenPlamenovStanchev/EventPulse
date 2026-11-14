@@ -1,7 +1,56 @@
 {% extends 'base.html' %}
 {% block title %}Insights · EventPulse{% endblock %}
 {% block content %}
-{% include 'includes/page_header.html' with eyebrow='Revenue intelligence' title='Insights' description='Revenue, occupancy, and event-health analysis will appear here.' %}
-{% include 'includes/empty_state.html' with heading='Insights need operational data' message='Create records in the future event, attendee, and ticket workflows to activate meaningful analysis.' %}
-<a class="text-link" href="{% url 'ticketing:dashboard' %}">← Back to Dashboard</a>
+{% include 'includes/page_header.html' with eyebrow='Revenue intelligence' title='Insights' description='Compare recorded revenue, occupancy, and payment status from persisted tickets.' %}
+
+<form method="get" class="list-controls insights-filter" aria-label="Filter insights by event">
+    <div class="control-field"><label for="insights-event">Event scope</label><select id="insights-event" name="event"><option value="">All events</option>{% for event in events %}<option value="{{ event.pk }}"{% if selected_event and selected_event.pk == event.pk %} selected{% endif %}>{{ event.name }}</option>{% endfor %}</select></div>
+    <div class="control-actions"><button class="button button-primary" type="submit">Apply</button><a class="button button-secondary" href="{% url 'ticketing:insights' %}">Reset filters</a></div>
+</form>
+
+<section class="intro-panel" aria-labelledby="insights-scope-title">
+    <div><p class="section-label">Current scope</p><h2 id="insights-scope-title">{% if selected_event %}{{ selected_event.name }}{% else %}All events{% endif %}</h2><p>{% if selected_event %}All insights below are limited to this event.{% else %}All insights below include every persisted event and ticket.{% endif %}</p></div>
+    {% if selected_event %}<a class="button button-secondary" href="{% url 'events:event_detail' selected_event.pk %}">View event</a>{% endif %}
+</section>
+
+<section aria-labelledby="scope-kpis-title">
+    <div class="section-heading"><div><p class="section-label">Financial position</p><h2 id="scope-kpis-title">Scope totals</h2></div><p class="section-note">Expected includes every ticket; collected includes paid tickets only.</p></div>
+    <div class="kpi-grid">
+        <article class="kpi-card"><p>Issued tickets</p><strong>{{ issued_ticket_count }}</strong><span>Paid and unpaid reservations</span></article>
+        <article class="kpi-card"><p>Expected revenue</p><strong>{{ expected_revenue|floatformat:2 }}</strong><span>All issued ticket prices</span></article>
+        <article class="kpi-card"><p>Collected revenue</p><strong>{{ collected_revenue|floatformat:2 }}</strong><span>Paid ticket prices only</span></article>
+        <article class="kpi-card"><p>Outstanding revenue</p><strong>{{ outstanding_revenue|floatformat:2 }}</strong><span>{{ collection_percentage|floatformat:1 }}% collection rate</span></article>
+    </div>
+</section>
+
+<section class="related-section" aria-labelledby="revenue-chart-title">
+    <div class="section-heading"><div><p class="section-label">Visualization</p><h2 id="revenue-chart-title">Expected vs collected revenue by event</h2></div><p class="section-note">Bar widths are scaled to the largest expected amount in this scope.</p></div>
+    {% if chart_rows %}
+        <div class="chart-panel" role="img" aria-label="Expected and collected revenue comparison by event; exact values are listed below">
+            <div class="chart-legend" aria-label="Revenue chart legend"><span class="chart-key">Expected revenue</span><span class="chart-key chart-key-collected">Collected revenue</span></div>
+            <div class="chart-rows">{% for row in chart_rows %}<div class="chart-row"><span class="chart-label">{{ row.performance.event.name }}</span><div class="chart-track"><span class="chart-bar" style="width: {{ row.expected_width }}%"></span></div><span class="chart-value">Expected: {{ row.performance.expected_revenue|floatformat:2 }}</span><div class="chart-track"><span class="chart-bar chart-bar-collected" style="width: {{ row.collected_width }}%"></span></div><span class="chart-value">Collected: {{ row.performance.collected_revenue|floatformat:2 }}</span></div>{% endfor %}</div>
+        </div>
+        <div class="table-wrap" tabindex="0" aria-label="Revenue comparison data table"><table class="data-table"><caption>Revenue comparison values</caption><thead><tr><th scope="col">Event</th><th scope="col">Expected revenue</th><th scope="col">Collected revenue</th><th scope="col">Outstanding revenue</th></tr></thead><tbody>{% for row in chart_rows %}<tr><td data-label="Event"><a class="table-link" href="{% url 'events:event_detail' row.performance.event.pk %}">{{ row.performance.event.name }}</a></td><td data-label="Expected revenue">{{ row.performance.expected_revenue|floatformat:2 }}</td><td data-label="Collected revenue">{{ row.performance.collected_revenue|floatformat:2 }}</td><td data-label="Outstanding revenue">{{ row.performance.outstanding_revenue|floatformat:2 }}</td></tr>{% endfor %}</tbody></table></div>
+    {% else %}
+        <section class="empty-state" aria-label="No revenue comparison data"><span class="empty-state-icon" aria-hidden="true">+</span><div><h3>No events to compare yet</h3><p>Create an event to show recorded revenue comparisons.</p></div><a class="button button-primary" href="{% url 'events:event_create' %}">Create event</a></section>
+    {% endif %}
+</section>
+
+<section class="related-section" aria-labelledby="occupancy-chart-title">
+    <div class="section-heading"><div><p class="section-label">Visualization</p><h2 id="occupancy-chart-title">Event occupancy comparison</h2></div><p class="section-note">Every issued ticket reserves a seat, regardless of payment status.</p></div>
+    {% if event_performance %}
+        <div class="chart-panel" role="img" aria-label="Event occupancy comparison; exact values are listed below"><div class="chart-rows">{% for performance in event_performance %}<div class="chart-row"><span class="chart-label">{{ performance.event.name }}</span><div class="chart-track"><span class="chart-bar chart-bar-collected" style="width: {{ performance.occupancy_percentage }}%"></span></div><span class="chart-value">{{ performance.ticket_count }} of {{ performance.capacity }} seats · {{ performance.occupancy_percentage|floatformat:1 }}% occupied · {{ performance.health_status }}</span></div>{% endfor %}</div></div>
+        <div class="table-wrap" tabindex="0" aria-label="Occupancy comparison data table"><table class="data-table"><caption>Occupancy comparison values</caption><thead><tr><th scope="col">Event</th><th scope="col">Venue</th><th scope="col">Tickets / capacity</th><th scope="col">Remaining seats</th><th scope="col">Occupancy</th><th scope="col">Health status</th></tr></thead><tbody>{% for performance in event_performance %}<tr><td data-label="Event"><a class="table-link" href="{% url 'events:event_detail' performance.event.pk %}">{{ performance.event.name }}</a></td><td data-label="Venue">{{ performance.event.venue.name }}</td><td data-label="Tickets / capacity">{{ performance.ticket_count }} / {{ performance.capacity }}</td><td data-label="Remaining seats">{{ performance.remaining_seats }}</td><td data-label="Occupancy">{{ performance.occupancy_percentage|floatformat:1 }}%</td><td data-label="Health status">{{ performance.health_status }}</td></tr>{% endfor %}</tbody></table></div>
+    {% else %}
+        <p class="muted-copy">No event occupancy data is available until an event is created.</p>
+    {% endif %}
+</section>
+
+<section class="related-section" aria-labelledby="distribution-chart-title">
+    <div class="section-heading"><div><p class="section-label">Visualization</p><h2 id="distribution-chart-title">Paid vs unpaid ticket distribution</h2></div><p class="section-note">This distribution counts ticket records, not monetary amounts.</p></div>
+    <div class="chart-panel" role="img" aria-label="{{ paid_ticket_count }} paid and {{ unpaid_ticket_count }} unpaid tickets; exact values are listed below"><div class="distribution-chart"><div class="chart-row"><span class="chart-label">Paid tickets</span><div class="chart-track"><span class="chart-bar chart-bar-paid" style="width: {{ paid_ticket_percentage }}%"></span></div><span class="chart-value">{{ paid_ticket_count }} ticket{{ paid_ticket_count|pluralize }} · {{ paid_ticket_percentage|floatformat:1 }}%</span></div><div class="chart-row"><span class="chart-label">Unpaid tickets</span><div class="chart-track"><span class="chart-bar chart-bar-unpaid" style="width: {{ unpaid_ticket_percentage }}%"></span></div><span class="chart-value">{{ unpaid_ticket_count }} ticket{{ unpaid_ticket_count|pluralize }} · {{ unpaid_ticket_percentage|floatformat:1 }}%</span></div></div></div>
+    <div class="table-wrap" tabindex="0" aria-label="Ticket distribution data table"><table class="data-table"><caption>Ticket payment distribution values</caption><thead><tr><th scope="col">Payment status</th><th scope="col">Ticket count</th><th scope="col">Share of issued tickets</th></tr></thead><tbody><tr><td data-label="Payment status">Paid</td><td data-label="Ticket count">{{ paid_ticket_count }}</td><td data-label="Share">{{ paid_ticket_percentage|floatformat:1 }}%</td></tr><tr><td data-label="Payment status">Unpaid</td><td data-label="Ticket count">{{ unpaid_ticket_count }}</td><td data-label="Share">{{ unpaid_ticket_percentage|floatformat:1 }}%</td></tr></tbody></table></div>
+</section>
+
+<a class="text-link" href="{% url 'ticketing:dashboard' %}">Back to Dashboard</a>
 {% endblock %}

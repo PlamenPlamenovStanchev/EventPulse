@@ -11,6 +11,7 @@ from django.utils import timezone
 from attendees.models import Attendee
 from events.models import Event, Venue
 
+from .analytics import get_event_performance
 from .forms import PaymentForm, TicketForm
 from .models import Ticket
 
@@ -993,6 +994,354 @@ class TrackerTests(TestCase):
         self.assertEqual(after_invalid.context["collected_revenue"], Decimal("0"))
         self.assertEqual(after_paid.context["collected_revenue"], Decimal("25"))
         self.assertEqual(after_paid.context["outstanding_revenue"], Decimal("0"))
+
+
+class DashboardAnalyticsTests(TestCase):
+    def dashboard(self):
+        return self.client.get(reverse("ticketing:dashboard"))
+
+    def test_empty_dashboard_uses_zero_metrics_and_existing_route(self):
+        response = self.dashboard()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_event_count"], 0)
+        self.assertEqual(response.context["total_attendee_count"], 0)
+        self.assertEqual(response.context["issued_ticket_count"], 0)
+        self.assertEqual(response.context["expected_revenue"], Decimal("0.00"))
+        self.assertEqual(response.context["collected_revenue"], Decimal("0.00"))
+        self.assertEqual(response.context["outstanding_revenue"], Decimal("0.00"))
+        self.assertEqual(response.context["collection_percentage"], Decimal("0.00"))
+        self.assertContains(response, "Total attendees")
+        self.assertContains(response, "Collection rate")
+
+    def test_dashboard_counts_and_financial_metrics_match_tracker(self):
+        venue = Venue.objects.create(
+            name="Dashboard Hall", address="8 Metrics Street", capacity=10
+        )
+        first_event = Event.objects.create(
+            name="Dashboard Summit", starts_at="2027-01-10T09:00:00Z",
+            description="An event used for dashboard metrics.", venue=venue,
+        )
+        second_event = Event.objects.create(
+            name="Dashboard Workshop", starts_at="2027-01-11T09:00:00Z",
+            description="A second event used for dashboard metrics.", venue=venue,
+        )
+        shared_attendee = Attendee.objects.create(
+            name="Alex", email="alex-dashboard@example.com", phone="555-0130"
+        )
+        other_attendee = Attendee.objects.create(
+            name="Blair", email="blair-dashboard@example.com", phone="555-0131"
+        )
+        Ticket.objects.create(
+            event=first_event, attendee=shared_attendee, price=Decimal("25.00"),
+            status=Ticket.Status.PAID, payment_date=date(2027, 1, 1),
+            payment_method=Ticket.PaymentMethod.CARD,
+        )
+        Ticket.objects.create(
+            event=second_event, attendee=shared_attendee, price=Decimal("15.00")
+        )
+        Ticket.objects.create(
+            event=first_event, attendee=other_attendee, price=Decimal("0.00"),
+            status=Ticket.Status.PAID, payment_date=date(2027, 1, 2),
+            payment_method=Ticket.PaymentMethod.CASH,
+        )
+
+        dashboard_response = self.dashboard()
+        tracker_response = self.client.get(reverse("ticketing:tracker"))
+
+        self.assertEqual(dashboard_response.context["total_event_count"], 2)
+        self.assertEqual(dashboard_response.context["total_attendee_count"], 2)
+        self.assertEqual(dashboard_response.context["issued_ticket_count"], 3)
+        self.assertEqual(dashboard_response.context["expected_revenue"], Decimal("40"))
+        self.assertEqual(dashboard_response.context["collected_revenue"], Decimal("25"))
+        self.assertEqual(dashboard_response.context["outstanding_revenue"], Decimal("15"))
+        self.assertEqual(dashboard_response.context["collection_percentage"], Decimal("62.5"))
+        for metric in (
+            "expected_revenue", "collected_revenue", "outstanding_revenue",
+            "collection_percentage",
+        ):
+            self.assertEqual(
+                dashboard_response.context[metric], tracker_response.context[metric]
+            )
+
+
+class EventPerformanceAnalyticsTests(TestCase):
+    def create_event(self, name, capacity=10, venue=None):
+        venue = venue or Venue.objects.create(
+            name=f"{name} Hall", address=f"{name} Street", capacity=capacity
+        )
+        return Event.objects.create(
+            name=name,
+            starts_at="2027-02-01T09:00:00Z",
+            description=f"{name} performance test event.",
+            venue=venue,
+        )
+
+    def issue_tickets(self, event, count, price=Decimal("0.00")):
+        for number in range(count):
+            attendee = Attendee.objects.create(
+                name=f"{event.name} attendee {number}",
+                email=f"{event.pk}-{number}@performance.example.com",
+                phone="555-0190",
+            )
+            Ticket.objects.create(event=event, attendee=attendee, price=price)
+
+    def test_empty_dashboard_has_event_comparison_empty_state(self):
+        response = self.client.get(reverse("ticketing:dashboard"))
+
+        self.assertEqual(response.context["event_performance"], [])
+        self.assertContains(response, "No events to compare yet")
+        self.assertContains(response, reverse("events:event_create"))
+
+    def test_health_status_uses_exact_unrounded_occupancy_boundaries(self):
+        boundary_cases = (
+            ("Below 30", 2, "Needs Attention"),
+            ("Exactly 30", 3, "On Track"),
+            ("Below 80", 7, "On Track"),
+            ("Exactly 80", 8, "Near Capacity"),
+            ("Below 100", 9, "Near Capacity"),
+            ("Exactly 100", 10, "Full"),
+        )
+        events = []
+        for name, ticket_count, _ in boundary_cases:
+            event = self.create_event(name)
+            self.issue_tickets(event, ticket_count)
+            events.append(event)
+
+        with self.assertNumQueries(1):
+            performances = get_event_performance()
+
+        performance_by_event = {performance.event.pk: performance for performance in performances}
+        for event, (_, ticket_count, expected_health) in zip(events, boundary_cases):
+            with self.subTest(event=event.name):
+                performance = performance_by_event[event.pk]
+                self.assertEqual(performance.ticket_count, ticket_count)
+                self.assertEqual(performance.occupancy_percentage, Decimal(ticket_count * 10))
+                self.assertEqual(performance.health_status, expected_health)
+
+    def test_event_metrics_are_independent_and_match_tracker_and_detail(self):
+        shared_venue = Venue.objects.create(
+            name="Shared Performance Hall", address="1 Compare Street", capacity=5
+        )
+        partially_filled_event = self.create_event(
+            "Partially Filled", venue=shared_venue
+        )
+        full_event = self.create_event("Full Shared Venue", venue=shared_venue)
+        empty_event = self.create_event("Empty Venue", capacity=8)
+
+        paid_attendee = Attendee.objects.create(
+            name="Paid attendee", email="paid-performance@example.com", phone="555-0191"
+        )
+        unpaid_attendee = Attendee.objects.create(
+            name="Unpaid attendee", email="unpaid-performance@example.com", phone="555-0192"
+        )
+        Ticket.objects.create(
+            event=partially_filled_event, attendee=paid_attendee, price=Decimal("20.00"),
+            status=Ticket.Status.PAID, payment_date=date(2027, 1, 15),
+            payment_method=Ticket.PaymentMethod.CARD,
+        )
+        Ticket.objects.create(
+            event=partially_filled_event, attendee=unpaid_attendee, price=Decimal("10.00")
+        )
+        self.issue_tickets(full_event, 4, price=Decimal("5.00"))
+        zero_price_attendee = Attendee.objects.create(
+            name="Zero price attendee",
+            email="zero-price-performance@example.com",
+            phone="555-0193",
+        )
+        Ticket.objects.create(
+            event=full_event, attendee=zero_price_attendee, price=Decimal("0.00")
+        )
+
+        dashboard_response = self.client.get(reverse("ticketing:dashboard"))
+        tracker_response = self.client.get(reverse("ticketing:tracker"))
+        detail_response = self.client.get(
+            reverse("events:event_detail", args=[partially_filled_event.pk])
+        )
+        performance_by_event = {
+            performance.event.pk: performance
+            for performance in dashboard_response.context["event_performance"]
+        }
+        partial_performance = performance_by_event[partially_filled_event.pk]
+        full_performance = performance_by_event[full_event.pk]
+        empty_performance = performance_by_event[empty_event.pk]
+
+        self.assertEqual(partial_performance.ticket_count, 2)
+        self.assertEqual(partial_performance.remaining_seats, 3)
+        self.assertEqual(partial_performance.occupancy_percentage, Decimal("40"))
+        self.assertEqual(partial_performance.expected_revenue, Decimal("30"))
+        self.assertEqual(partial_performance.collected_revenue, Decimal("20"))
+        self.assertEqual(partial_performance.outstanding_revenue, Decimal("10"))
+        self.assertEqual(partial_performance.collection_percentage, Decimal("66.66666666666666666666666667"))
+        self.assertEqual(partial_performance.health_status, "On Track")
+        self.assertEqual(full_performance.occupancy_percentage, Decimal("100"))
+        self.assertEqual(full_performance.health_status, "Full")
+        self.assertEqual(full_performance.expected_revenue, Decimal("20"))
+        self.assertEqual(full_performance.collected_revenue, Decimal("0"))
+        self.assertEqual(full_performance.outstanding_revenue, Decimal("20"))
+        self.assertEqual(full_performance.collection_percentage, Decimal("0.00"))
+        self.assertEqual(empty_performance.ticket_count, 0)
+        self.assertEqual(empty_performance.remaining_seats, 8)
+        self.assertEqual(empty_performance.expected_revenue, Decimal("0"))
+        self.assertEqual(empty_performance.collection_percentage, Decimal("0.00"))
+        self.assertEqual(empty_performance.health_status, "Needs Attention")
+        self.assertEqual(
+            partial_performance.expected_revenue,
+            detail_response.context["event"].expected_revenue,
+        )
+        self.assertEqual(
+            partial_performance.collected_revenue,
+            detail_response.context["event"].collected_revenue,
+        )
+        self.assertEqual(
+            dashboard_response.context["expected_revenue"],
+            tracker_response.context["expected_revenue"],
+        )
+        self.assertEqual(
+            dashboard_response.context["collected_revenue"],
+            tracker_response.context["collected_revenue"],
+        )
+        self.assertContains(
+            dashboard_response,
+            reverse("events:event_detail", args=[partially_filled_event.pk]),
+        )
+        self.assertContains(dashboard_response, "Full")
+
+
+class InsightsTests(TestCase):
+    def create_event(self, name, venue):
+        return Event.objects.create(
+            name=name,
+            starts_at="2027-06-01T09:00:00Z",
+            description="An event used for insights tests.",
+            venue=venue,
+        )
+
+    def create_attendee(self, suffix):
+        return Attendee.objects.create(
+            name=f"Insights attendee {suffix}",
+            email=f"insights-{suffix}@example.com",
+            phone="555-0160",
+        )
+
+    def test_empty_insights_uses_zero_metrics_and_text_alternatives(self):
+        response = self.client.get(reverse("ticketing:insights"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["selected_event"])
+        self.assertEqual(response.context["event_performance"], [])
+        self.assertEqual(response.context["issued_ticket_count"], 0)
+        self.assertEqual(response.context["paid_ticket_percentage"], Decimal("0"))
+        self.assertContains(response, "No events to compare yet")
+        self.assertContains(response, "Expected vs collected revenue by event")
+        self.assertContains(response, "Ticket payment distribution values")
+
+    def test_overall_and_selected_scope_reuse_shared_financial_definitions(self):
+        shared_venue = Venue.objects.create(
+            name="Insights Shared Hall", address="40 Data Street", capacity=4
+        )
+        alpha_event = self.create_event("Alpha Insights", shared_venue)
+        beta_event = self.create_event("Beta Insights", shared_venue)
+        long_event_name = (
+            "A very long insights event name designed to wrap safely in a chart label "
+            + "<script>alert('not executable')</script>"
+        )
+        long_name_event = self.create_event(
+            long_event_name,
+            Venue.objects.create(
+                name="Quiet Hall", address="41 Data Street", capacity=3
+            ),
+        )
+        Ticket.objects.create(
+            event=alpha_event, attendee=self.create_attendee("alpha-paid"),
+            price=Decimal("50.00"), status=Ticket.Status.PAID,
+            payment_date=date(2027, 5, 1), payment_method=Ticket.PaymentMethod.CARD,
+        )
+        Ticket.objects.create(
+            event=alpha_event, attendee=self.create_attendee("alpha-unpaid"),
+            price=Decimal("25.00"),
+        )
+        Ticket.objects.create(
+            event=alpha_event, attendee=self.create_attendee("alpha-zero"),
+            price=Decimal("0.00"),
+        )
+        for number in range(4):
+            Ticket.objects.create(
+                event=beta_event, attendee=self.create_attendee(f"beta-{number}"),
+                price=Decimal("10.00"),
+            )
+
+        overall_response = self.client.get(reverse("ticketing:insights"))
+        selected_response = self.client.get(
+            reverse("ticketing:insights"), {"event": alpha_event.pk}
+        )
+        tracker_response = self.client.get(reverse("ticketing:tracker"))
+        detail_response = self.client.get(
+            reverse("events:event_detail", args=[alpha_event.pk])
+        )
+
+        self.assertEqual(len(overall_response.context["event_performance"]), 3)
+        self.assertEqual(overall_response.context["expected_revenue"], Decimal("115"))
+        self.assertEqual(overall_response.context["collected_revenue"], Decimal("50"))
+        self.assertEqual(overall_response.context["paid_ticket_count"], 1)
+        self.assertEqual(overall_response.context["unpaid_ticket_count"], 6)
+        self.assertEqual(overall_response.context["paid_ticket_percentage"], Decimal("14.28571428571428571428571429"))
+        self.assertEqual(overall_response.context["expected_revenue"], tracker_response.context["expected_revenue"])
+        self.assertEqual(overall_response.context["collected_revenue"], tracker_response.context["collected_revenue"])
+        self.assertEqual(selected_response.context["selected_event"], alpha_event)
+        self.assertEqual(len(selected_response.context["event_performance"]), 1)
+        self.assertEqual(selected_response.context["expected_revenue"], Decimal("75"))
+        self.assertEqual(selected_response.context["collected_revenue"], Decimal("50"))
+        self.assertEqual(selected_response.context["outstanding_revenue"], Decimal("25"))
+        self.assertEqual(selected_response.context["paid_ticket_count"], 1)
+        self.assertEqual(selected_response.context["unpaid_ticket_count"], 2)
+        self.assertEqual(selected_response.context["event_performance"][0].occupancy_percentage, Decimal("75"))
+        self.assertEqual(selected_response.context["event_performance"][0].health_status, "On Track")
+        self.assertEqual(selected_response.context["expected_revenue"], detail_response.context["event"].expected_revenue)
+        self.assertEqual(selected_response.context["collected_revenue"], detail_response.context["event"].collected_revenue)
+        self.assertContains(selected_response, f'<option value="{alpha_event.pk}" selected>')
+        self.assertContains(selected_response, "Reset filters")
+        self.assertContains(overall_response, "Expected vs collected revenue by event")
+        self.assertContains(overall_response, "Event occupancy comparison")
+        self.assertContains(overall_response, "Paid vs unpaid ticket distribution")
+        self.assertContains(overall_response, "Revenue comparison values")
+        self.assertContains(overall_response, "Occupancy comparison values")
+        self.assertContains(overall_response, long_event_name.split("<")[0])
+        self.assertContains(overall_response, "&lt;script&gt;")
+        self.assertNotContains(overall_response, "<script>alert('not executable')</script>")
+
+    def test_invalid_event_filter_falls_back_to_overall_scope(self):
+        venue = Venue.objects.create(
+            name="Filter Hall", address="42 Data Street", capacity=1
+        )
+        event = self.create_event("Filter Event", venue)
+        Ticket.objects.create(
+            event=event, attendee=self.create_attendee("filter"), price=Decimal("12.00")
+        )
+
+        response = self.client.get(reverse("ticketing:insights"), {"event": "invalid"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["selected_event"])
+        self.assertEqual(response.context["expected_revenue"], Decimal("12"))
+        self.assertEqual(len(response.context["event_performance"]), 1)
+
+    def test_fully_paid_selected_event_has_full_collection_distribution(self):
+        venue = Venue.objects.create(
+            name="Paid Hall", address="43 Data Street", capacity=2
+        )
+        event = self.create_event("Paid Insights", venue)
+        Ticket.objects.create(
+            event=event, attendee=self.create_attendee("paid-only"), price=Decimal("30.00"),
+            status=Ticket.Status.PAID, payment_date=date(2027, 5, 2),
+            payment_method=Ticket.PaymentMethod.CASH,
+        )
+
+        response = self.client.get(reverse("ticketing:insights"), {"event": event.pk})
+
+        self.assertEqual(response.context["collection_percentage"], Decimal("100"))
+        self.assertEqual(response.context["paid_ticket_percentage"], Decimal("100"))
+        self.assertEqual(response.context["unpaid_ticket_percentage"], Decimal("0"))
 
 
 class TicketCrudViewTests(TestCase):

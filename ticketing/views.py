@@ -1,8 +1,7 @@
 from django.contrib import messages
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, Q, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -10,12 +9,27 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from attendees.models import Attendee
 from events.models import Event
 
+from .analytics import get_event_performance, get_revenue_metrics
 from .forms import PaymentForm, TicketForm
 from .models import Ticket
 
 
 def dashboard(request):
-    return render(request, 'ticketing/dashboard.html')
+    revenue_metrics = get_revenue_metrics()
+    return render(
+        request,
+        "ticketing/dashboard.html",
+        {
+            "total_event_count": Event.objects.count(),
+            "total_attendee_count": Attendee.objects.count(),
+            "expected_revenue": revenue_metrics.expected_revenue,
+            "collected_revenue": revenue_metrics.collected_revenue,
+            "outstanding_revenue": revenue_metrics.outstanding_revenue,
+            "collection_percentage": revenue_metrics.collection_percentage,
+            "issued_ticket_count": revenue_metrics.issued_ticket_count,
+            "event_performance": get_event_performance(),
+        },
+    )
 
 
 class TicketListView(ListView):
@@ -215,20 +229,7 @@ def mark_ticket_unpaid(request, pk):
 
 
 def tracker(request):
-    money_field = DecimalField(max_digits=10, decimal_places=2)
-    overall_totals = Ticket.objects.aggregate(
-        expected_revenue=Coalesce(
-            Sum("price"), Value(Decimal("0.00"), output_field=money_field)
-        ),
-        collected_revenue=Coalesce(
-            Sum("price", filter=Q(status=Ticket.Status.PAID)),
-            Value(Decimal("0.00"), output_field=money_field),
-        ),
-        paid_ticket_count=Count("pk", filter=Q(status=Ticket.Status.PAID)),
-        unpaid_ticket_count=Count("pk", filter=Q(status=Ticket.Status.UNPAID)),
-    )
-    expected_revenue = overall_totals["expected_revenue"]
-    collected_revenue = overall_totals["collected_revenue"]
+    revenue_metrics = get_revenue_metrics()
 
     search_term = request.GET.get("q", "").strip()
     event_id = request.GET.get("event", "").strip()
@@ -261,19 +262,77 @@ def tracker(request):
             "selected_event": selected_event,
             "selected_status": selected_status,
             "matching_ticket_count": tickets.count(),
-            "expected_revenue": expected_revenue,
-            "collected_revenue": collected_revenue,
-            "outstanding_revenue": expected_revenue - collected_revenue,
-            "paid_ticket_count": overall_totals["paid_ticket_count"],
-            "unpaid_ticket_count": overall_totals["unpaid_ticket_count"],
-            "collection_percentage": (
-                collected_revenue / expected_revenue * Decimal("100")
-                if expected_revenue > Decimal("0.00")
-                else Decimal("0.00")
-            ),
+            "expected_revenue": revenue_metrics.expected_revenue,
+            "collected_revenue": revenue_metrics.collected_revenue,
+            "outstanding_revenue": revenue_metrics.outstanding_revenue,
+            "paid_ticket_count": revenue_metrics.paid_ticket_count,
+            "unpaid_ticket_count": revenue_metrics.unpaid_ticket_count,
+            "collection_percentage": revenue_metrics.collection_percentage,
         },
     )
 
 
 def insights(request):
-    return render(request, 'ticketing/insights.html')
+    selected_event_id = request.GET.get("event", "").strip()
+    selected_event = (
+        Event.objects.filter(pk=selected_event_id).first()
+        if selected_event_id.isdigit()
+        else None
+    )
+    events = Event.objects.select_related("venue").order_by("starts_at", "name")
+    scoped_events = events.filter(pk=selected_event.pk) if selected_event else events
+    scoped_tickets = Ticket.objects.filter(event=selected_event) if selected_event else None
+    revenue_metrics = get_revenue_metrics(scoped_tickets)
+    event_performance = get_event_performance(scoped_events)
+
+    max_expected_revenue = max(
+        (performance.expected_revenue for performance in event_performance),
+        default=Decimal("0.00"),
+    )
+    chart_rows = [
+        {
+            "performance": performance,
+            "expected_width": (
+                performance.expected_revenue / max_expected_revenue * Decimal("100")
+                if max_expected_revenue
+                else Decimal("0")
+            ),
+            "collected_width": (
+                performance.collected_revenue / max_expected_revenue * Decimal("100")
+                if max_expected_revenue
+                else Decimal("0")
+            ),
+        }
+        for performance in event_performance
+    ]
+    ticket_total = revenue_metrics.issued_ticket_count
+    paid_ticket_percentage = (
+        Decimal(revenue_metrics.paid_ticket_count) / Decimal(ticket_total) * Decimal("100")
+        if ticket_total
+        else Decimal("0")
+    )
+    unpaid_ticket_percentage = (
+        Decimal(revenue_metrics.unpaid_ticket_count) / Decimal(ticket_total) * Decimal("100")
+        if ticket_total
+        else Decimal("0")
+    )
+
+    return render(
+        request,
+        "ticketing/insights.html",
+        {
+            "events": events,
+            "selected_event": selected_event,
+            "event_performance": event_performance,
+            "chart_rows": chart_rows,
+            "expected_revenue": revenue_metrics.expected_revenue,
+            "collected_revenue": revenue_metrics.collected_revenue,
+            "outstanding_revenue": revenue_metrics.outstanding_revenue,
+            "collection_percentage": revenue_metrics.collection_percentage,
+            "issued_ticket_count": revenue_metrics.issued_ticket_count,
+            "paid_ticket_count": revenue_metrics.paid_ticket_count,
+            "unpaid_ticket_count": revenue_metrics.unpaid_ticket_count,
+            "paid_ticket_percentage": paid_ticket_percentage,
+            "unpaid_ticket_percentage": unpaid_ticket_percentage,
+        },
+    )

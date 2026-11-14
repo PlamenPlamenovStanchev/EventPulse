@@ -17,20 +17,53 @@
 <section aria-labelledby="kpi-title">
     <div class="section-heading">
         <div><p class="section-label">Live view</p><h2 id="kpi-title">Operational snapshot</h2></div>
-        <span class="status-badge status-neutral">Waiting for records</span>
+        <span class="status-badge status-neutral">{% if issued_ticket_count %}Live database metrics{% else %}Ready for records{% endif %}</span>
     </div>
     <div class="kpi-grid">
-        <article class="kpi-card"><p>Upcoming events</p><strong>—</strong><span>No event records yet</span></article>
-        <article class="kpi-card"><p>Tickets reserved</p><strong>—</strong><span>No ticket records yet</span></article>
-        <article class="kpi-card"><p>Collected revenue</p><strong>—</strong><span>Payment tracking starts with tickets</span></article>
-        <article class="kpi-card"><p>Venue occupancy</p><strong>—</strong><span>Capacity insights appear after setup</span></article>
+        <article class="kpi-card"><p>Total events</p><strong>{{ total_event_count }}</strong><span>All persisted event records</span></article>
+        <article class="kpi-card"><p>Total attendees</p><strong>{{ total_attendee_count }}</strong><span>Unique attendee records, not tickets</span></article>
+        <article class="kpi-card"><p>Issued tickets</p><strong>{{ issued_ticket_count }}</strong><span>All paid and unpaid tickets</span></article>
+        <article class="kpi-card" aria-label="Expected revenue is the sum of all issued ticket prices"><p>Expected revenue</p><strong>{{ expected_revenue|floatformat:2 }}</strong><span>Sum of every issued ticket price</span></article>
+        <article class="kpi-card" aria-label="Collected revenue is the sum of paid ticket prices"><p>Collected revenue</p><strong>{{ collected_revenue|floatformat:2 }}</strong><span>Paid ticket prices only</span></article>
+        <article class="kpi-card" aria-label="Outstanding revenue is expected revenue less collected revenue"><p>Outstanding revenue</p><strong>{{ outstanding_revenue|floatformat:2 }}</strong><span>Expected minus collected</span></article>
+        <article class="kpi-card"><p>Collection rate</p><strong>{{ collection_percentage|floatformat:1 }}%</strong><progress class="collection-progress" value="{{ collection_percentage }}" max="100" aria-label="{{ collection_percentage|floatformat:1 }} percent of expected revenue collected">{{ collection_percentage|floatformat:1 }}%</progress><span>Collected revenue divided by expected revenue</span></article>
     </div>
+</section>
+
+<section class="related-section" aria-labelledby="event-performance-title">
+    <div class="section-heading">
+        <div><p class="section-label">Event comparison</p><h2 id="event-performance-title">Event performance</h2></div>
+        <p class="section-note">Health reflects current ticket occupancy only: below 30%, 30–79%, 80–99%, or full.</p>
+    </div>
+    {% if event_performance %}
+        <div class="table-wrap" tabindex="0" aria-label="Scrollable event performance table">
+            <table class="data-table">
+                <caption class="visually-hidden">Event performance based on issued tickets and recorded payments</caption>
+                <thead><tr><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Venue</th><th scope="col">Tickets / capacity</th><th scope="col">Remaining seats</th><th scope="col">Occupancy</th><th scope="col">Expected</th><th scope="col">Collected</th><th scope="col">Outstanding</th><th scope="col">Collection rate</th><th scope="col">Health status</th></tr></thead>
+                <tbody>{% for performance in event_performance %}<tr>
+                    <td data-label="Event"><a class="table-link" href="{% url 'events:event_detail' performance.event.pk %}">{{ performance.event.name }}</a></td>
+                    <td data-label="Date">{{ performance.event.starts_at|date:"j M Y, H:i" }}</td>
+                    <td data-label="Venue">{{ performance.event.venue.name }}</td>
+                    <td data-label="Tickets / capacity">{{ performance.ticket_count }} / {{ performance.capacity }}</td>
+                    <td data-label="Remaining seats">{{ performance.remaining_seats }}</td>
+                    <td data-label="Occupancy">{{ performance.occupancy_percentage|floatformat:1 }}%</td>
+                    <td data-label="Expected revenue">{{ performance.expected_revenue|floatformat:2 }}</td>
+                    <td data-label="Collected revenue">{{ performance.collected_revenue|floatformat:2 }}</td>
+                    <td data-label="Outstanding revenue">{{ performance.outstanding_revenue|floatformat:2 }}</td>
+                    <td data-label="Collection rate">{{ performance.collection_percentage|floatformat:1 }}%</td>
+                    <td data-label="Health status"><span class="status-badge">{{ performance.health_status }}</span></td>
+                </tr>{% endfor %}</tbody>
+            </table>
+        </div>
+    {% else %}
+        <section class="empty-state" aria-label="No event performance data"><span class="empty-state-icon" aria-hidden="true">+</span><div><h3>No events to compare yet</h3><p>Create an event to see its capacity, revenue, and current occupancy health here.</p></div><a class="button button-primary" href="{% url 'events:event_create' %}">Create event</a></section>
+    {% endif %}
 </section>
 
 <section class="module-section" aria-labelledby="modules-title">
     <div class="section-heading">
         <div><p class="section-label">Workspace</p><h2 id="modules-title">Modules ready to connect</h2></div>
-        <p class="section-note">Statistics will become available once records are created.</p>
+        <p class="section-note">Create records to keep this snapshot current.</p>
     </div>
     <div class="module-grid">
         <a class="module-card" href="{% url 'events:event_list' %}"><span class="module-number">01</span><h3>Events</h3><p>Plan schedules and connect venues.</p></a>
