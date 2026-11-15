@@ -19,7 +19,7 @@
                 <td data-label="Address">{{ venue.address }}</td>
                 <td data-label="Capacity">{{ venue.capacity }}</td>
                 <td data-label="Event count">{{ venue.event_count }}</td>
-                <td class="table-actions" data-label="Actions"><a href="{% url 'events:venue_detail' venue.pk %}">View<span class="visually-hidden"> {{ venue.name }}</span></a><a href="{% url 'events:venue_update' venue.pk %}">Edit<span class="visually-hidden"> {{ venue.name }}</span></a><a class="danger-link" href="{% url 'events:venue_delete' venue.pk %}">Delete<span class="visually-hidden"> {{ venue.name }}</span></a></td>
+                <td data-label="Actions"><div class="table-actions"><a href="{% url 'events:venue_detail' venue.pk %}">View<span class="visually-hidden"> {{ venue.name }}</span></a><a href="{% url 'events:venue_update' venue.pk %}">Edit<span class="visually-hidden"> {{ venue.name }}</span></a><a class="danger-link" href="{% url 'events:venue_delete' venue.pk %}">Delete<span class="visually-hidden"> {{ venue.name }}</span></a></div></td>
             </tr>{% endfor %}</tbody>
         </table>
     </div>

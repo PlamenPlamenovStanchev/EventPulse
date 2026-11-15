@@ -2,8 +2,10 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.contrib.staticfiles import finders
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
+from django.template import Context, Template
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -14,6 +16,22 @@ from events.models import Event, Venue
 from .analytics import get_event_performance
 from .forms import PaymentForm, TicketForm
 from .models import Ticket
+
+
+class TemplateFormattingTests(TestCase):
+    def test_money_filter_is_registered_and_renders_two_decimal_places(self):
+        rendered = Template(
+            "{% load ticketing_formatting %}{{ amount|money }}"
+        ).render(Context({"amount": Decimal("12.5")}))
+
+        self.assertEqual(rendered, "12.50")
+
+    def test_money_filter_returns_empty_text_for_missing_or_invalid_values(self):
+        template = Template("{% load ticketing_formatting %}{{ amount|money }}")
+
+        self.assertEqual(template.render(Context({"amount": None})), "")
+        self.assertEqual(template.render(Context({"amount": "not-a-number"})), "")
+        self.assertEqual(template.render(Context({"amount": Decimal("NaN")})), "")
 
 
 class InterfaceFoundationTests(TestCase):
@@ -44,12 +62,39 @@ class InterfaceFoundationTests(TestCase):
                 response = self.client.get(reverse(route_name))
                 self.assertContains(response, 'Primary navigation')
                 self.assertContains(response, 'Built for clearer operations.')
+                self.assertContains(response, 'href="#main-content"')
+                self.assertContains(response, 'id="main-content"')
 
     def test_homepage_contains_eventpulse_identity(self):
         response = self.client.get(reverse('ticketing:dashboard'))
 
         self.assertContains(response, 'Welcome to EventPulse')
         self.assertContains(response, 'Every event. Every attendee. Every insight.')
+
+    def test_dashboard_uses_current_product_copy_and_module_links(self):
+        response = self.client.get(reverse('ticketing:dashboard'))
+
+        self.assertContains(response, 'Connected operations')
+        self.assertContains(response, 'Your event operations, in one view.')
+        self.assertContains(response, 'issue tickets, record payments')
+        self.assertContains(response, 'Connected modules')
+        self.assertNotContains(response, 'Foundation stage')
+        self.assertNotContains(response, 'EventPulse will bring')
+        self.assertNotContains(response, 'Modules ready to connect')
+        for route_name in (
+            'events:event_list',
+            'attendees:attendee_list',
+            'ticketing:ticket_list',
+            'ticketing:insights',
+        ):
+            self.assertContains(response, reverse(route_name))
+
+    def test_base_template_references_the_local_favicon(self):
+        response = self.client.get(reverse('ticketing:dashboard'))
+
+        self.assertIsNotNone(finders.find('icons/eventpulse.svg'))
+        self.assertContains(response, 'rel="icon"')
+        self.assertContains(response, 'href="/static/icons/eventpulse.svg"')
 
     @override_settings(DEBUG=False, ALLOWED_HOSTS=['testserver'])
     def test_custom_404_handler_renders_when_debug_is_disabled(self):
@@ -647,8 +692,44 @@ class PaymentFormTests(TestCase):
         self.assertEqual(updated_ticket.price, Decimal("25.00"))
         self.assertEqual(updated_ticket.created_at, created_at)
 
-    def test_form_excludes_unrelated_ticket_fields(self):
-        self.assertEqual(list(PaymentForm.base_fields), ["payment_date", "payment_method"])
+    def test_form_includes_read_only_event_reference_and_excludes_ticket_fields(self):
+        ticket = self.create_ticket()
+        form = PaymentForm(instance=ticket)
+
+        self.assertEqual(
+            list(PaymentForm.base_fields),
+            ["payment_date", "payment_method", "event_reference"],
+        )
+        self.assertEqual(
+            list(form.fields),
+            ["event_reference", "payment_date", "payment_method"],
+        )
+        self.assertTrue(form.fields["event_reference"].disabled)
+        self.assertFalse(form.fields["event_reference"].required)
+        self.assertEqual(form["event_reference"].value(), self.event.name)
+        response = self.client.get(reverse("ticketing:ticket_mark_paid", args=[ticket.pk]))
+        self.assertContains(response, 'for="id_event_reference"')
+        self.assertContains(response, 'id="id_event_reference"')
+        self.assertContains(response, 'disabled')
+        self.assertNotIn("event", PaymentForm.Meta.fields)
+
+    def test_forged_event_reference_does_not_change_the_ticket_event(self):
+        ticket = self.create_ticket()
+        other_event = Event.objects.create(
+            name="Other Event",
+            starts_at="2026-12-11T09:00:00Z",
+            description="An event that must not replace the ticket event.",
+            venue=self.venue,
+        )
+        ticket.status = Ticket.Status.PAID
+        form = PaymentForm(
+            data=self.payment_data(event_reference=other_event.name), instance=ticket
+        )
+
+        self.assertTrue(form.is_valid())
+        updated_ticket = form.save()
+        updated_ticket.refresh_from_db()
+        self.assertEqual(updated_ticket.event, self.event)
 
     def test_zero_price_ticket_can_record_a_payment(self):
         ticket = self.create_ticket(price=Decimal("0.00"))
@@ -797,6 +878,27 @@ class PaymentStatusActionTests(TestCase):
         self.client.post(self.unpaid_url(ticket), {"status": Ticket.Status.PAID})
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, Ticket.Status.UNPAID)
+
+    def test_forged_event_reference_is_ignored_by_the_paid_action(self):
+        ticket = self.create_ticket()
+        other_event = Event.objects.create(
+            name="Forged Event",
+            starts_at="2026-12-12T09:00:00Z",
+            description="An event that must not replace the ticket event.",
+            venue=self.venue,
+        )
+
+        response = self.client.post(
+            self.paid_url(ticket),
+            self.paid_data(event_reference=other_event.name),
+        )
+
+        ticket.refresh_from_db()
+        self.assertRedirects(response, reverse("ticketing:ticket_detail", args=[ticket.pk]))
+        self.assertEqual(ticket.event, self.event)
+        self.assertEqual(ticket.attendee, self.attendee)
+        self.assertEqual(ticket.price, Decimal("25.00"))
+        self.assertEqual(ticket.status, Ticket.Status.PAID)
 
     def test_actions_preserve_unrelated_fields_and_repeated_post_does_not_write_again(self):
         ticket = self.create_ticket()
@@ -963,6 +1065,24 @@ class TrackerTests(TestCase):
         self.assertIsNone(invalid.context["selected_event"])
         self.assertEqual(invalid.context["selected_status"], "")
 
+    def test_event_query_parameter_accepts_only_safe_existing_ids(self):
+        alpha_ticket = self.create_ticket("Alex", "safe-alpha@example.com")
+        beta_ticket = self.create_ticket(
+            "Blair", "safe-beta@example.com", event=self.beta_event
+        )
+
+        for event_id in ("²", "invalid", "-1", "0", "9" * 5000, "999999"):
+            with self.subTest(event_id=event_id):
+                response = self.tracker(event=event_id)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIsNone(response.context["selected_event"])
+                self.assertEqual(list(response.context["tickets"]), [alpha_ticket, beta_ticket])
+
+        response = self.tracker(event=self.alpha_event.pk)
+        self.assertEqual(response.context["selected_event"], self.alpha_event)
+        self.assertEqual(list(response.context["tickets"]), [alpha_ticket])
+
     def test_tracker_displays_payment_action_links_for_each_status(self):
         unpaid_ticket = self.create_ticket("Alex", "links-alex@example.com")
         paid_ticket = self.create_ticket(
@@ -974,6 +1094,8 @@ class TrackerTests(TestCase):
 
         self.assertContains(response, reverse("ticketing:ticket_mark_paid", args=[unpaid_ticket.pk]))
         self.assertContains(response, reverse("ticketing:ticket_mark_unpaid", args=[paid_ticket.pk]))
+        self.assertContains(response, '<td data-label="Action"><div class="table-actions">')
+        self.assertNotContains(response, '<td class="table-actions"')
 
     def test_tracker_metrics_refresh_after_valid_and_invalid_payment_submissions(self):
         ticket = self.create_ticket("Alex", "transition-alex@example.com", price=Decimal("25.00"))
@@ -1206,6 +1328,8 @@ class EventPerformanceAnalyticsTests(TestCase):
             reverse("events:event_detail", args=[partially_filled_event.pk]),
         )
         self.assertContains(dashboard_response, "Full")
+        self.assertContains(dashboard_response, "status-health-on-track")
+        self.assertContains(dashboard_response, "status-health-full")
 
 
 class InsightsTests(TestCase):
@@ -1319,12 +1443,18 @@ class InsightsTests(TestCase):
             event=event, attendee=self.create_attendee("filter"), price=Decimal("12.00")
         )
 
-        response = self.client.get(reverse("ticketing:insights"), {"event": "invalid"})
+        for event_id in ("²", "invalid", "-1", "0", "9" * 5000, "999999"):
+            with self.subTest(event_id=event_id):
+                response = self.client.get(reverse("ticketing:insights"), {"event": event_id})
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.context["selected_event"])
+                self.assertEqual(response.status_code, 200)
+                self.assertIsNone(response.context["selected_event"])
+                self.assertEqual(response.context["expected_revenue"], Decimal("12"))
+                self.assertEqual(len(response.context["event_performance"]), 1)
+
+        response = self.client.get(reverse("ticketing:insights"), {"event": event.pk})
+        self.assertEqual(response.context["selected_event"], event)
         self.assertEqual(response.context["expected_revenue"], Decimal("12"))
-        self.assertEqual(len(response.context["event_performance"]), 1)
 
     def test_fully_paid_selected_event_has_full_collection_distribution(self):
         venue = Venue.objects.create(
@@ -1528,6 +1658,19 @@ class TicketCrudViewTests(TestCase):
         self.assertContains(response, reverse("events:event_create"))
         self.assertContains(response, reverse("attendees:attendee_create"))
 
+    def test_event_preselection_accepts_only_safe_existing_ids(self):
+        create_url = reverse("ticketing:ticket_create")
+
+        for event_id in ("²", "invalid", "-1", "0", "9" * 5000, "999999"):
+            with self.subTest(event_id=event_id):
+                response = self.client.get(create_url, {"event": event_id})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIsNone(response.context["form"]["event"].value())
+
+        response = self.client.get(create_url, {"event": self.event.pk})
+        self.assertEqual(str(response.context["form"]["event"].value()), str(self.event.pk))
+
     def test_ticket_navigation_and_placeholder_routes_remain_available(self):
         for route_name in (
             "ticketing:dashboard",
@@ -1584,6 +1727,8 @@ class TicketUiRefinementTests(TestCase):
         self.assertContains(response, self.event.name)
         self.assertContains(response, self.attendee.name)
         self.assertContains(response, "status-badge status-paid")
+        self.assertContains(response, '<td data-label="Actions"><div class="table-actions">')
+        self.assertNotContains(response, '<td class="table-actions"')
         for route_name in (
             "ticketing:ticket_detail",
             "ticketing:ticket_update",
@@ -1744,6 +1889,22 @@ class TicketListControlsAndIntegrationTests(TestCase):
             [self.alpha_unpaid, self.beta_unpaid, self.alpha_paid],
         )
         self.assertIsNone(unknown_event_response.context["selected_event"])
+
+    def test_event_query_parameter_accepts_only_safe_existing_ids(self):
+        for event_id in ("²", "invalid", "-1", "0", "9" * 5000, "999999"):
+            with self.subTest(event_id=event_id):
+                response = self.ticket_list(event=event_id)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    list(response.context["tickets"]),
+                    [self.alpha_unpaid, self.beta_unpaid, self.alpha_paid],
+                )
+                self.assertIsNone(response.context["selected_event"])
+
+        response = self.ticket_list(event=self.earlier_event.pk)
+        self.assertEqual(response.context["selected_event"], self.earlier_event)
+        self.assertEqual(list(response.context["tickets"]), [self.alpha_unpaid, self.alpha_paid])
 
     def test_controls_preserve_values_and_expose_accurate_match_count(self):
         response = self.ticket_list(

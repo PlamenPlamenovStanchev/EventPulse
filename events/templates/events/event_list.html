@@ -22,7 +22,7 @@
                 <td data-label="Venue">{{ event.venue.name }}</td>
                 <td data-label="Description" title="{{ event.description }}">{{ event.description|truncatechars:90 }}</td>
                 <td data-label="Tickets">{{ event.ticket_count }}</td>
-                <td class="table-actions" data-label="Actions"><a href="{% url 'events:event_detail' event.pk %}">View<span class="visually-hidden"> {{ event.name }}</span></a><a href="{% url 'events:event_update' event.pk %}">Edit<span class="visually-hidden"> {{ event.name }}</span></a><a class="danger-link" href="{% url 'events:event_delete' event.pk %}">Delete<span class="visually-hidden"> {{ event.name }}</span></a></td>
+                <td data-label="Actions"><div class="table-actions"><a href="{% url 'events:event_detail' event.pk %}">View<span class="visually-hidden"> {{ event.name }}</span></a><a href="{% url 'events:event_update' event.pk %}">Edit<span class="visually-hidden"> {{ event.name }}</span></a><a class="danger-link" href="{% url 'events:event_delete' event.pk %}">Delete<span class="visually-hidden"> {{ event.name }}</span></a></div></td>
             </tr>{% endfor %}</tbody>
         </table>
     </div>

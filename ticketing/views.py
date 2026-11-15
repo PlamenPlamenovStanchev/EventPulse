@@ -14,6 +14,16 @@ from .forms import PaymentForm, TicketForm
 from .models import Ticket
 
 
+def _get_event_from_query_param(event_id):
+    if not event_id.isascii() or not event_id.isdecimal() or len(event_id) > 19:
+        return None
+
+    event_id = int(event_id)
+    if not 0 < event_id <= 9_223_372_036_854_775_807:
+        return None
+    return Event.objects.filter(pk=event_id).first()
+
+
 def dashboard(request):
     revenue_metrics = get_revenue_metrics()
     return render(
@@ -66,9 +76,7 @@ class TicketListView(ListView):
 
     def get_selected_event(self):
         event_id = self.request.GET.get("event", "").strip()
-        if not event_id.isdigit():
-            return None
-        return Event.objects.filter(pk=event_id).first()
+        return _get_event_from_query_param(event_id)
 
     def get_selected_status(self):
         status = self.request.GET.get("status", "")
@@ -121,8 +129,9 @@ class TicketCreateView(CreateView):
     def get_initial(self):
         initial = super().get_initial()
         event_id = self.request.GET.get("event", "").strip()
-        if event_id.isdigit() and Event.objects.filter(pk=event_id).exists():
-            initial["event"] = event_id
+        selected_event = _get_event_from_query_param(event_id)
+        if selected_event:
+            initial["event"] = selected_event.pk
         return initial
 
     def post(self, request, *args, **kwargs):
@@ -233,7 +242,7 @@ def tracker(request):
 
     search_term = request.GET.get("q", "").strip()
     event_id = request.GET.get("event", "").strip()
-    selected_event = Event.objects.filter(pk=event_id).first() if event_id.isdigit() else None
+    selected_event = _get_event_from_query_param(event_id)
     selected_status = request.GET.get("status", "")
     valid_statuses = {value for value, _ in Ticket.Status.choices}
     if selected_status not in valid_statuses:
@@ -274,11 +283,7 @@ def tracker(request):
 
 def insights(request):
     selected_event_id = request.GET.get("event", "").strip()
-    selected_event = (
-        Event.objects.filter(pk=selected_event_id).first()
-        if selected_event_id.isdigit()
-        else None
-    )
+    selected_event = _get_event_from_query_param(selected_event_id)
     events = Event.objects.select_related("venue").order_by("starts_at", "name")
     scoped_events = events.filter(pk=selected_event.pk) if selected_event else events
     scoped_tickets = Ticket.objects.filter(event=selected_event) if selected_event else None

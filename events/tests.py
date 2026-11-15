@@ -438,6 +438,47 @@ class EventAndVenueListControlsTests(TestCase):
         self.assertContains(search_response, 'name="q"')
         self.assertContains(venue_response, 'name="venue"')
 
+    def test_malformed_venue_filter_is_ignored_without_a_server_error(self):
+        response = self.client.get(reverse("events:event_list"), {"venue": "invalid"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["events"]), [self.spring, self.autumn])
+        self.assertEqual(response.context["selected_venue"], "")
+
+    def test_valid_venue_filter_combines_with_search_and_sorting(self):
+        later_autumn = Event.objects.create(
+            name="Autumn Workshop",
+            starts_at=timezone.make_aware(datetime(2026, 11, 10, 9, 0)),
+            description="Workshop programme.",
+            venue=self.riverside,
+        )
+
+        response = self.client.get(
+            reverse("events:event_list"),
+            {"q": "AUTUMN", "venue": self.riverside.pk, "sort": "-date"},
+        )
+
+        self.assertEqual(list(response.context["events"]), [later_autumn, self.autumn])
+        self.assertEqual(response.context["selected_venue"], str(self.riverside.pk))
+        self.assertContains(
+            response, f'<option value="{self.riverside.pk}" selected>'
+        )
+
+    def test_unknown_negative_and_oversized_venue_filters_are_safe(self):
+        for venue_id, expected_events, selected_venue in (
+            ("999999", [], "999999"),
+            ("-1", [self.spring, self.autumn], ""),
+            ("9" * 100, [self.spring, self.autumn], ""),
+        ):
+            with self.subTest(venue_id=venue_id):
+                response = self.client.get(
+                    reverse("events:event_list"), {"venue": venue_id}
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(list(response.context["events"]), expected_events)
+                self.assertEqual(response.context["selected_venue"], selected_venue)
+
     def test_event_sorting_is_chronological_in_both_directions(self):
         earliest_response = self.client.get(reverse("events:event_list"))
         latest_response = self.client.get(
@@ -464,9 +505,13 @@ class EventAndVenueListControlsTests(TestCase):
         self.assertContains(event_response, reverse("events:event_detail", args=[self.autumn.pk]))
         self.assertContains(event_response, reverse("events:event_update", args=[self.autumn.pk]))
         self.assertContains(event_response, reverse("events:event_delete", args=[self.autumn.pk]))
+        self.assertContains(event_response, '<td data-label="Actions"><div class="table-actions">')
+        self.assertNotContains(event_response, '<td class="table-actions"')
         self.assertContains(venue_response, "Venue name")
         self.assertContains(venue_response, "Event count")
         self.assertContains(venue_response, reverse("events:venue_create"))
         self.assertContains(venue_response, reverse("events:venue_detail", args=[self.riverside.pk]))
         self.assertContains(venue_response, reverse("events:venue_update", args=[self.riverside.pk]))
         self.assertContains(venue_response, reverse("events:venue_delete", args=[self.riverside.pk]))
+        self.assertContains(venue_response, '<td data-label="Actions"><div class="table-actions">')
+        self.assertNotContains(venue_response, '<td class="table-actions"')

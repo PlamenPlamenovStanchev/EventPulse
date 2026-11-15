@@ -24,7 +24,7 @@
                 <td data-label="Attendee"><a class="table-link" href="{% url 'attendees:attendee_detail' ticket.attendee.pk %}">{{ ticket.attendee.name }}</a><span class="table-secondary">{{ ticket.attendee.email }}</span></td>
                 <td data-label="Price">{{ ticket.price|floatformat:2 }}</td>
                 <td data-label="Payment status"><span class="status-badge {% if ticket.status == 'PAID' %}status-paid{% else %}status-unpaid{% endif %}">{{ ticket.get_status_display }}</span></td>
-                <td class="table-actions" data-label="Actions"><a href="{% url 'ticketing:ticket_detail' ticket.pk %}">View<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a><a href="{% url 'ticketing:ticket_update' ticket.pk %}">Edit<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a><a class="danger-link" href="{% url 'ticketing:ticket_delete' ticket.pk %}">Delete<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a></td>
+                <td data-label="Actions"><div class="table-actions"><a href="{% url 'ticketing:ticket_detail' ticket.pk %}">View<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a><a href="{% url 'ticketing:ticket_update' ticket.pk %}">Edit<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a><a class="danger-link" href="{% url 'ticketing:ticket_delete' ticket.pk %}">Delete<span class="visually-hidden"> ticket for {{ ticket.attendee.name }}</span></a></div></td>
             </tr>{% endfor %}</tbody>
         </table>
     </div>

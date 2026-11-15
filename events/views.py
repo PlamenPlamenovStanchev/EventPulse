@@ -22,21 +22,32 @@ class EventListView(ListView):
             ticket_count=Count("tickets")
         )
         search_term = self.request.GET.get("q", "").strip()
-        venue_id = self.request.GET.get("venue", "").strip()
+        venue_id = self.get_selected_venue_id()
         sort = self.request.GET.get("sort", "date")
 
         if search_term:
             queryset = queryset.filter(name__icontains=search_term)
-        if venue_id:
+        if venue_id is not None:
             queryset = queryset.filter(venue_id=venue_id)
 
         ordering = {"date": ("starts_at", "name"), "-date": ("-starts_at", "name")}
         return queryset.order_by(*ordering.get(sort, ordering["date"]))
 
+    def get_selected_venue_id(self):
+        venue_id = self.request.GET.get("venue", "").strip()
+        if not venue_id.isascii() or not venue_id.isdecimal() or len(venue_id) > 19:
+            return None
+
+        venue_id = int(venue_id)
+        return venue_id if 0 < venue_id <= 9_223_372_036_854_775_807 else None
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["venues"] = Venue.objects.order_by("name")
-        context["selected_venue"] = self.request.GET.get("venue", "")
+        selected_venue_id = self.get_selected_venue_id()
+        context["selected_venue"] = (
+            str(selected_venue_id) if selected_venue_id is not None else ""
+        )
         context["search_term"] = self.request.GET.get("q", "").strip()
         context["sort"] = self.request.GET.get("sort", "date")
         return context

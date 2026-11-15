@@ -19,7 +19,7 @@
                 <td data-label="Name"><a class="table-link" href="{% url 'attendees:attendee_detail' attendee.pk %}">{{ attendee.name }}</a></td>
                 <td data-label="Email"><a class="table-link" href="mailto:{{ attendee.email }}">{{ attendee.email }}</a></td>
                 <td data-label="Phone"><a class="table-link" href="tel:{{ attendee.phone }}">{{ attendee.phone }}</a></td>
-                <td class="table-actions" data-label="Actions"><a href="{% url 'attendees:attendee_detail' attendee.pk %}">View<span class="visually-hidden"> {{ attendee.name }}</span></a><a href="{% url 'attendees:attendee_update' attendee.pk %}">Edit<span class="visually-hidden"> {{ attendee.name }}</span></a><a class="danger-link" href="{% url 'attendees:attendee_delete' attendee.pk %}">Delete<span class="visually-hidden"> {{ attendee.name }}</span></a></td>
+                <td data-label="Actions"><div class="table-actions"><a href="{% url 'attendees:attendee_detail' attendee.pk %}">View<span class="visually-hidden"> {{ attendee.name }}</span></a><a href="{% url 'attendees:attendee_update' attendee.pk %}">Edit<span class="visually-hidden"> {{ attendee.name }}</span></a><a class="danger-link" href="{% url 'attendees:attendee_delete' attendee.pk %}">Delete<span class="visually-hidden"> {{ attendee.name }}</span></a></div></td>
             </tr>{% endfor %}</tbody>
         </table>
     </div>

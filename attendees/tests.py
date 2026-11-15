@@ -382,4 +382,6 @@ class AttendeeListControlsTests(TestCase):
         self.assertContains(response, 'for="attendee-search"')
         self.assertContains(response, 'class="table-wrap"')
         self.assertContains(response, 'data-label="Actions"')
+        self.assertContains(response, '<td data-label="Actions"><div class="table-actions">')
+        self.assertNotContains(response, '<td class="table-actions"')
         self.assertContains(response, 'aria-current="page"')

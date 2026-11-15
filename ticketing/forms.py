@@ -126,6 +126,12 @@ class TicketForm(forms.ModelForm):
 
 class PaymentForm(forms.ModelForm):
     """Collect payment details while the caller determines the payment status."""
+    field_order = ["event_reference", "payment_date", "payment_method"]
+    event_reference = forms.CharField(
+        disabled=True,
+        required=False,
+        label="Event (read-only)",
+    )
     payment_date = forms.DateField(
         required=False,
         input_formats=["%Y-%m-%d"],
@@ -148,3 +154,8 @@ class PaymentForm(forms.ModelForm):
     class Meta:
         model = Ticket
         fields = ["payment_date", "payment_method"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields["event_reference"].initial = self.instance.event.name
